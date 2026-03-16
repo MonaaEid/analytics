@@ -5,7 +5,7 @@ It supports pagination to handle large result sets and allows for complex search
 
 from __future__ import annotations
 
-from typing import List, Dict, Any
+from typing import Any
 
 from .github_client import GitHubClient
 from .pagination import paginate_page_number
@@ -14,9 +14,10 @@ from .pagination import paginate_page_number
 def search_issues(
     client: GitHubClient,
     query: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Search GitHub issues and pull requests using the REST search API.
+
     Args:
         client: Authenticated GitHub client.
         query: GitHub search query string.

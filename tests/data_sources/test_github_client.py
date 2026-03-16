@@ -1,8 +1,8 @@
-import pytest
 from unittest.mock import Mock
 
-import hiero_analytics.data_sources.github_client as github_client
+import pytest
 
+import hiero_analytics.data_sources.github_client as github_client
 
 # ---------------------------------------------------------
 # FIXTURE: disable sleeping

@@ -4,7 +4,6 @@ import pytest
 
 import hiero_analytics.data_sources.github_search as search
 
-
 # ---------------------------------------------------------
 # fixtures
 # ---------------------------------------------------------

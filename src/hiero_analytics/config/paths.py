@@ -3,9 +3,8 @@ Defines configuration constants for paths and directories used in the analytics 
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import os
+from pathlib import Path
 
 ORG = os.getenv("GITHUB_ORG", "hiero-ledger")
 REPO = os.getenv("GITHUB_REPO", "hiero-sdk-python")
@@ -51,6 +50,26 @@ def ensure_output_dirs() -> None:
     ]:
         path.mkdir(parents=True, exist_ok=True)
 
+def ensure_org_dirs(org: str) -> tuple[Path, Path]:
+    """
+    Create org-specific output directories.
+    Args:
+        org: Organization identifier, such as a GitHub organization name or slug.
+    Returns:
+        A tuple containing:
+            org_data_dir: Directory for organization-level data outputs.
+            org_charts_dir: Directory for organization-level chart outputs.
+    """
+    org_name = org.replace("/", "_")
+
+    org_data_dir = ORG_DATA_DIR / org_name
+    org_charts_dir = ORG_CHARTS_DIR / org_name
+
+    org_data_dir.mkdir(parents=True, exist_ok=True)
+    org_charts_dir.mkdir(parents=True, exist_ok=True)
+
+    return org_data_dir, org_charts_dir
+
 def ensure_repo_dirs(repo: str) -> tuple[Path, Path]:
     """
     Create repo-specific output directories.
@@ -58,7 +77,6 @@ def ensure_repo_dirs(repo: str) -> tuple[Path, Path]:
     Returns:
         repo_data_dir, repo_charts_dir
     """
-
     repo_name = repo.replace("/", "_")
 
     repo_data_dir = REPO_DATA_DIR / repo_name

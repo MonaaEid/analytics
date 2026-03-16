@@ -8,25 +8,23 @@ parallel requests to improve ingestion speed.
 """
 
 from __future__ import annotations
-from datetime import datetime
-
-from typing import List
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from .github_client import GitHubClient
-from .pagination import paginate_cursor
-from .github_queries import (
-    REPOS_QUERY,
-    ISSUES_QUERY,
-    MERGED_PR_QUERY,
-)
-from .models import (
-    RepositoryRecord,
-    IssueRecord,
-    PullRequestDifficultyRecord,
-)
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+
+from .github_client import GitHubClient
+from .github_queries import (
+    ISSUES_QUERY,
+    MERGED_PR_QUERY,
+    REPOS_QUERY,
+)
+from .models import (
+    IssueRecord,
+    PullRequestDifficultyRecord,
+    RepositoryRecord,
+)
+from .pagination import paginate_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +40,7 @@ def _parse_dt(value: str | None) -> datetime | None:
 def fetch_org_repos_graphql(
     client: GitHubClient,
     org: str,
-) -> List[RepositoryRecord]:
+) -> list[RepositoryRecord]:
     """
     Fetch all repository full names for an organization using GraphQL.
 
@@ -88,7 +86,7 @@ def fetch_repo_issues_graphql(
     owner: str,
     repo: str,
     states: list[str] | None = None,
-) -> List[IssueRecord]:
+) -> list[IssueRecord]:
     """
     Fetch all issues for a repository using GraphQL.
 
@@ -101,7 +99,6 @@ def fetch_repo_issues_graphql(
     Returns:
         A list of normalized issue records.
     """
-
     normalized_states = None
     if states:
         normalized_states = [s.upper() for s in states]
@@ -163,7 +160,6 @@ def fetch_org_issues_graphql(
     Returns:
         A combined list of issue records across the organization.
     """
-
     repos = fetch_org_repos_graphql(client, org)
 
     all_issues: list[IssueRecord] = []

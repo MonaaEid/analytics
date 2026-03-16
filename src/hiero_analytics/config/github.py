@@ -2,8 +2,9 @@
 Defines configuration constants for GitHub API interactions in the analytics module.
 Includes settings for API endpoints, authentication, and rate limiting to ensure efficient and reliable data retrieval from
 """
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
 
 load_dotenv()
 

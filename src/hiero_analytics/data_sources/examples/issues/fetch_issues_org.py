@@ -2,10 +2,10 @@
 Example script: fetch all issues across an organization
 """
 
+from hiero_analytics.config.logging import setup_logging
 from hiero_analytics.config.paths import ORG
 from hiero_analytics.data_sources.github_client import GitHubClient
 from hiero_analytics.data_sources.github_ingest import fetch_org_issues_graphql
-from hiero_analytics.config.logging import setup_logging
 
 setup_logging()
 

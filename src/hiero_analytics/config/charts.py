@@ -49,3 +49,22 @@ These settings ensure that gridlines are consistently styled across all charts, 
 GRID_ENABLED: bool = True
 GRID_ALPHA: float = 0.4
 GRID_STYLE: str = "--"
+
+DIFFICULTY_COLORS = {
+    "Advanced": "#E78AC3",         # pink
+    "Intermediate": "#FFD92F",     # yellow
+    "Beginner": "#8DA0CB",         # purple / lavender
+    "Good First Issue": "#66C2A5", # light green
+    "Unknown": "#B3B3B3",          # neutral grey
+}
+
+ONBOARDING_COLORS = {
+    "Good First Issues": "#2E749F",            # navy
+    "Good First Issue Candidates": "#D8A251",  # dark pink
+}
+
+STATE_COLORS = {
+    "total": "#3D3D3D", # dark grey
+    "closed": "#28A197",# turquoise
+    "open": "#F46A25",  # orange
+}

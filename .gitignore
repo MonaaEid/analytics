@@ -1,5 +1,4 @@
 *.csv
-*.png
 .coverage
 # Python-generated files
 __pycache__/

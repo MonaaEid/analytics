@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from hiero_analytics.domain.labels import DIFFICULTY_ORDER
+
 from .base import create_figure, finalize_chart, prepare_dataframe
 
 
@@ -13,6 +15,7 @@ def plot_pie(
     value_col: str,
     title: str,
     output_path: Path,
+    colors: dict[str, str] | None = None,
 ) -> None:
     """
     Plot a pie chart.
@@ -29,10 +32,10 @@ def plot_pie(
         Chart title.
     output_path : Path
         File path where the chart image will be saved.
+    colors : dict[str, str], optional
+        Mapping of label -> color.
     """
     data = prepare_dataframe(df, label_col, value_col)
-
-    data = df[[label_col, value_col]].dropna()
 
     if data.empty:
         raise ValueError("No valid data available for plotting")
@@ -40,16 +43,37 @@ def plot_pie(
     if data[value_col].sum() == 0:
         raise ValueError("Pie chart values sum to zero")
 
-    fig, ax = create_figure()
-
-    ax.pie(
-        data[value_col],
-        labels=data[label_col],
-        autopct="%1.1f%%",
-        startangle=90,
+    # Sort slices largest → smallest for readability
+    data[label_col] = pd.Categorical(
+        data[label_col],
+        categories=DIFFICULTY_ORDER,
+        ordered=True,
     )
 
-    # Ensure circular shape
+    data = data.sort_values(label_col)
+
+    slice_colors = None
+    if colors:
+        slice_colors = [colors.get(label) for label in data[label_col]]
+
+    fig, ax = create_figure()
+
+    wedges, _, _ = ax.pie(
+        data[value_col],
+        autopct="%1.1f%%",
+        startangle=90,
+        colors=slice_colors,
+    )
+
+    # Use legend instead of slice labels to avoid overlap
+    ax.legend(
+        wedges,
+        data[label_col],
+        title="Category",
+        loc="center left",
+        bbox_to_anchor=(1, 0.5),
+    )
+
     ax.set_aspect("equal")
 
     finalize_chart(

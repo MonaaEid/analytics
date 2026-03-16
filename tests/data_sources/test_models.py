@@ -1,12 +1,12 @@
 from datetime import datetime
+
 import pytest
 
 from hiero_analytics.data_sources.models import (
-    RepositoryRecord,
     IssueRecord,
     PullRequestDifficultyRecord,
+    RepositoryRecord,
 )
-
 
 # ---------------------------------------------------------
 # RepositoryRecord

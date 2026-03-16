@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Mapping, TypedDict
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Any, TypedDict
 
 import requests
 
@@ -58,7 +59,6 @@ def github_headers() -> dict[str, str]:
     Build HTTP headers used for GitHub API requests.
     This is required for github to accept the query.
     """
-
     headers: dict[str, str] = {
         "User-Agent": "hiero-analytics",
         "Accept": "application/vnd.github+json",
@@ -92,7 +92,6 @@ class GitHubClient:
         Initialize the client with a persistent HTTP session and
         authentication headers.
         """
-
         # Reusable HTTP session with default headers for authentication and content type
         self.session: requests.Session = requests.Session()
         self.session.headers.update(github_headers())
@@ -108,7 +107,6 @@ class GitHubClient:
 
     def log_usage(self) -> None:
         """Log API usage statistics."""
-
         logger.info(
             "GitHub API usage: %d requests, %d GraphQL points used",
             self.requests_made,
@@ -121,7 +119,6 @@ class GitHubClient:
 
     def _handle_graphql_rate(self, data: JSON) -> None:
         """Handle GraphQL rate-limit reporting and throttling."""
-
         rate: GraphQLRateLimit | None = (data.get("data") or {}).get("rateLimit")
 
         if not rate:
@@ -142,7 +139,7 @@ class GitHubClient:
         if reset_at:
 
             reset_time = datetime.fromisoformat(reset_at.replace("Z", "+00:00"))
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             seconds_until_reset = int((reset_time - now).total_seconds())
 
@@ -173,7 +170,6 @@ class GitHubClient:
         kwargs: Mapping[str, Any],
     ) -> JSON | None:
         """Detect GraphQL errors and retry if rate-limited."""
-
         errors = data.get("errors")
 
         if not errors:
@@ -193,7 +189,7 @@ class GitHubClient:
                         rate["resetAt"].replace("Z", "+00:00")
                     )
 
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     wait_seconds = int((reset_time - now).total_seconds())
 
                     wait_seconds = max(wait_seconds, 60)
@@ -374,7 +370,6 @@ class GitHubClient:
         Returns:
             Parsed JSON response
         """
-
         payload: JSON = {
             "query": query,
             "variables": dict(variables),

@@ -1,15 +1,14 @@
-from unittest.mock import Mock
 from datetime import datetime
+from unittest.mock import Mock
 
 import pytest
 
 import hiero_analytics.data_sources.github_ingest as ingest
 from hiero_analytics.data_sources.models import (
-    RepositoryRecord,
     IssueRecord,
     PullRequestDifficultyRecord,
+    RepositoryRecord,
 )
-
 
 # ---------------------------------------------------------
 # helpers

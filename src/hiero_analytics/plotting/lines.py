@@ -49,7 +49,6 @@ def plot_line(
         rotate_x=rotate_x,
     )
 
-
 def plot_multiline(
     df: pd.DataFrame,
     x_col: str,
@@ -57,12 +56,39 @@ def plot_multiline(
     group_col: str,
     title: str,
     output_path: Path,
+    colors: dict[str, str] | None = None,
     rotate_x: int | None = None,
 ) -> None:
     """
     Plot a multi-series line chart grouped by a column.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataset.
+
+    x_col : str
+        Column used for x-axis.
+
+    y_col : str
+        Column used for y values.
+
+    group_col : str
+        Column defining the separate series.
+
+    title : str
+        Chart title.
+
+    output_path : Path
+        File path where the chart image will be saved.
+
+    colors : dict[str, str] | None
+        Optional mapping of series label -> color.
+
+    rotate_x : int | None
+        Optional x-axis label rotation.
     """
-    df = prepare_dataframe(df, x_col, y_col, group_col)
+    df = prepare_dataframe(df, x_col, y_col, group_col).copy()
 
     pivot = (
         df
@@ -82,12 +108,16 @@ def plot_multiline(
 
     fig, ax = create_figure()
 
-    for column in sorted(pivot.columns):
+    for column in pivot.columns:
+
+        color = colors.get(column) if colors else None
+
         ax.plot(
             pivot.index,
             pivot[column],
             marker="o",
             label=str(column),
+            color=color,
         )
 
     ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))

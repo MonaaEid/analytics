@@ -95,3 +95,10 @@ STATE_COLORS = {
     "closed": "#28A197",
     "open": "#F46A25",
 }
+
+MAINTAINER_PIPELINE_COLORS = {
+    "General User": "#94A3B8",   # muted slate
+    "Triage":       "#60B8D4",   # sky blue
+    "Committer":    "#2A9D8F",   # teal
+    "Maintainer":   "#E76F51",   # coral
+}

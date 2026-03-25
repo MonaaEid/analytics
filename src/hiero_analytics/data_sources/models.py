@@ -48,3 +48,18 @@ class PullRequestDifficultyRecord:
     issue_number: int
     issue_labels: list[str]
     author: str | None = None
+
+
+@dataclass(frozen=True)
+class ContributorActivityRecord:
+    """A normalized contributor activity event for issue/PR lifecycle actions."""
+
+    repo: str
+    activity_type: str
+    actor: str
+    occurred_at: datetime
+    target_type: str
+    target_number: int
+    target_author: str | None = None
+    detail: str | None = None
+    author: str | None = None

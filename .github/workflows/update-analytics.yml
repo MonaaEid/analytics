@@ -127,7 +127,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore: refresh analytics data and charts"
+          git commit -m -s "chore: refresh analytics data and charts"
 
           git push --force-with-lease origin "$BRANCH"
 

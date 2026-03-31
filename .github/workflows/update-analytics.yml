@@ -56,6 +56,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: uv run python -m hiero_analytics.run_contributor_profiles_repo
 
+      - name: Run maintainer analytics
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: uv run python -m hiero_analytics.run_maintainer_pipeline_org
+
       - name: Check for changes
         id: check_changes
         run: |

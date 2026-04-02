@@ -9,7 +9,8 @@ issues, and merged pull request difficulty metrics.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from typing import Mapping
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -218,3 +219,12 @@ class ContributorMergedPRCountRecord(BaseRecord):
                 merged_pr_count=node.get("issueCount", 0),
             )
         ]
+
+
+@dataclass(frozen=True)
+class ScorecardRecord:
+    """Normalized OpenSSF Scorecard record."""
+    repo: str
+    score: float
+    checks: dict[str, int]
+    date: datetime

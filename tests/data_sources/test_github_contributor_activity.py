@@ -1,3 +1,4 @@
+"""Tests for GitHub contributor activity ingestion."""
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock
 
@@ -9,11 +10,13 @@ from hiero_analytics.data_sources.models import ContributorActivityRecord, Repos
 
 @pytest.fixture
 def mock_client():
+    """Mock GitHub client fixture."""
     return Mock()
 
 
 @pytest.fixture
 def bypass_pagination(monkeypatch):
+    """Bypass pagination to return a single page."""
     monkeypatch.setattr(
         ingest,
         "paginate_cursor",
@@ -26,39 +29,59 @@ def _to_iso(value: datetime) -> str:
 
 
 def test_fetch_repo_contributor_activity_graphql(mock_client, bypass_pagination):
+    """Test fetching repository contributor activity."""
     now = datetime.now(UTC)
+    issue_created_at = _to_iso(now - timedelta(days=6))
     created_at = _to_iso(now - timedelta(days=5))
     reviewed_at = _to_iso(now - timedelta(days=4))
     merged_at = _to_iso(now - timedelta(days=3))
 
-    mock_client.graphql.return_value = {
-        "data": {
-            "repository": {
-                "pullRequests": {
-                    "nodes": [
-                        {
-                            "number": 10,
-                            "createdAt": created_at,
-                            "updatedAt": merged_at,
-                            "mergedAt": merged_at,
-                            "author": {"login": "alice"},
-                            "mergedBy": {"login": "carol"},
-                            "reviews": {
-                                "nodes": [
-                                    {
-                                        "state": "APPROVED",
-                                        "submittedAt": reviewed_at,
-                                        "author": {"login": "bob"},
-                                    }
-                                ]
-                            },
-                        }
-                    ],
-                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+    mock_client.graphql.side_effect = [
+        {
+            "data": {
+                "repository": {
+                    "pullRequests": {
+                        "nodes": [
+                            {
+                                "number": 10,
+                                "createdAt": created_at,
+                                "updatedAt": merged_at,
+                                "mergedAt": merged_at,
+                                "author": {"login": "alice"},
+                                "mergedBy": {"login": "carol"},
+                                "reviews": {
+                                    "nodes": [
+                                        {
+                                            "state": "APPROVED",
+                                            "submittedAt": reviewed_at,
+                                            "author": {"login": "bob"},
+                                        }
+                                    ]
+                                },
+                            }
+                        ],
+                        "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    }
                 }
             }
-        }
-    }
+        },
+        {
+            "data": {
+                "repository": {
+                    "issues": {
+                        "nodes": [
+                            {
+                                "number": 20,
+                                "createdAt": issue_created_at,
+                                "author": {"login": "dana"},
+                            }
+                        ],
+                        "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    }
+                }
+            }
+        },
+    ]
 
     records = ingest.fetch_repo_contributor_activity_graphql(
         mock_client,
@@ -68,16 +91,64 @@ def test_fetch_repo_contributor_activity_graphql(mock_client, bypass_pagination)
         use_cache=False,
     )
 
-    assert len(records) == 3
+    assert len(records) == 4
     assert all(isinstance(record, ContributorActivityRecord) for record in records)
     assert {record.activity_type for record in records} == {
+        "authored_issue",
         "authored_pull_request",
         "reviewed_pull_request",
         "merged_pull_request",
     }
+    issue_record = next(record for record in records if record.activity_type == "authored_issue")
+    assert issue_record.actor == "dana"
+    assert issue_record.target_type == "issue"
+    assert issue_record.target_number == 20
+    assert "states:[OPEN, CLOSED]" in mock_client.graphql.call_args_list[1].args[0]
+
+
+def test_fetch_repo_issue_activity_graphql_stops_after_older_issue(mock_client):
+    """Test early stop for older issues in pagination."""
+    now = datetime.now(UTC)
+    recent_issue_created_at = _to_iso(now - timedelta(days=5))
+    older_issue_created_at = _to_iso(now - timedelta(days=40))
+
+    mock_client.graphql.return_value = {
+        "data": {
+            "repository": {
+                "issues": {
+                    "nodes": [
+                        {
+                            "number": 20,
+                            "createdAt": recent_issue_created_at,
+                            "author": {"login": "dana"},
+                        },
+                        {
+                            "number": 21,
+                            "createdAt": older_issue_created_at,
+                            "author": {"login": "erin"},
+                        },
+                    ],
+                    "pageInfo": {"hasNextPage": True, "endCursor": "next-page"},
+                }
+            }
+        }
+    }
+
+    records = ingest._fetch_repo_issue_activity_graphql(
+        mock_client,
+        "org",
+        "repo",
+        cutoff=now - timedelta(days=30),
+    )
+
+    assert len(records) == 1
+    assert records[0].activity_type == "authored_issue"
+    assert records[0].actor == "dana"
+    assert mock_client.graphql.call_count == 1
 
 
 def test_fetch_org_contributor_activity_graphql(monkeypatch, mock_client):
+    """Test fetching organization contributor activity."""
     repos = [
         RepositoryRecord("org/repo1", "repo1", "org"),
         RepositoryRecord("org/repo2", "repo2", "org"),

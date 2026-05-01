@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Mapping
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -34,6 +33,16 @@ class BaseRecord:
         owner = BaseRecord._owner(context)
         repo = context.get("repo", "")
         return f"{owner}/{repo}" if owner and repo else ""
+
+    @staticmethod
+    def _login(payload: dict | None) -> str | None:
+        """Extract a login from a payload and filter out dependabot."""
+        if not payload:
+            return None
+        login = payload.get("login")
+        if login == "dependabot":
+            return None
+        return login
 
     @classmethod
     def from_github_node(cls, node: dict, context: dict) -> list[BaseRecord]:
@@ -110,8 +119,9 @@ class PullRequestDifficultyRecord(BaseRecord):
     @classmethod
     def from_github_node(cls, node: dict, context: dict) -> list[PullRequestDifficultyRecord]:
         repo_name = cls._repo_name(context)
-        author_node = node.get("author")
-        author = author_node.get("login") if isinstance(author_node, Mapping) else None
+        author = cls._login(node.get("author"))
+        if not author:
+            return []
         issues = node.get("closingIssuesReferences", {}).get("nodes", [])
         records = []
         for issue in issues:
@@ -150,10 +160,35 @@ class ContributorActivityRecord(BaseRecord):
     def from_github_node(cls, node: dict, context: dict) -> list[ContributorActivityRecord]:
         repo_name = cls._repo_name(context)
         cutoff = context.get("cutoff")
-        pr_number = node["number"]
         records = []
-        
-        pr_author = node.get("author", {}).get("login") if node.get("author") else None
+
+        activity_source = context.get("activity_source", "pull_request")
+
+        author_login = cls._login(node.get("author"))
+        if not author_login:
+            return []
+
+        if activity_source == "issue":
+            issue_number = node["number"]
+            issue_author = author_login
+            issue_created_at = _parse_dt(node.get("createdAt"))
+            if issue_created_at and (cutoff is None or issue_created_at >= cutoff) and issue_author:
+                records.append(
+                    cls(
+                        repo=repo_name,
+                        activity_type="created_issue",
+                        actor=issue_author,
+                        occurred_at=issue_created_at,
+                        target_type="issue",
+                        target_number=issue_number,
+                        target_author=issue_author,
+                    )
+                )
+
+            return records
+
+        pr_number = node["number"]
+        pr_author = author_login
         pr_created_at = _parse_dt(node.get("createdAt"))
         if pr_created_at and (cutoff is None or pr_created_at >= cutoff) and pr_author:
             records.append(
@@ -167,9 +202,9 @@ class ContributorActivityRecord(BaseRecord):
                     target_author=pr_author,
                 )
             )
-            
+
         for review in node.get("reviews", {}).get("nodes", []):
-            review_author = review.get("author", {}).get("login") if review.get("author") else None
+            review_author = cls._login(review.get("author"))
             reviewed_at = _parse_dt(review.get("submittedAt"))
             if reviewed_at and (cutoff is None or reviewed_at >= cutoff) and review_author:
                 records.append(
@@ -184,9 +219,9 @@ class ContributorActivityRecord(BaseRecord):
                         detail=review.get("state"),
                     )
                 )
-                
+
         merged_at = _parse_dt(node.get("mergedAt"))
-        merged_by = node.get("mergedBy", {}).get("login") if node.get("mergedBy") else None
+        merged_by = cls._login(node.get("mergedBy"))
         if merged_at and (cutoff is None or merged_at >= cutoff) and merged_by:
             records.append(
                 cls(
@@ -212,7 +247,9 @@ class ContributorMergedPRCountRecord(BaseRecord):
     @classmethod
     def from_github_node(cls, node: dict, context: dict) -> list[ContributorMergedPRCountRecord]:
         repo_name = cls._repo_name(context)
-        login = context.get("login", "")
+        login = cls._login({"login": context.get("login", "")})
+        if not login:
+            return []
         return [
             cls(
                 repo=repo_name,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -14,21 +14,21 @@ from hiero_analytics.data_sources.models import ContributorActivityRecord, Issue
 
 
 @pytest.fixture(name="_temp_cache_dir")
-def fixture_temp_cache_dir(monkeypatch, tmp_path):
+def fixture_temp_cache_dir(tmp_path):
     """Point cache writes at a temporary directory for test isolation."""
-    monkeypatch.setattr(cache, "GITHUB_CACHE_DIR", tmp_path / "github")
-    return cache.GITHUB_CACHE_DIR
+    return cache.GitHubRecordCache(tmp_path / "github")
 
 
 def test_issue_record_cache_round_trip(_temp_cache_dir):
     """Cached issue records should deserialize back to the original values."""
+    cache_manager = _temp_cache_dir
     records = [
         IssueRecord(
             repo="org/repo",
             number=1,
             title="Issue A",
             state="OPEN",
-            created_at=datetime(2024, 1, 1, tzinfo=UTC),
+            created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
             closed_at=None,
             labels=["bug"],
         )
@@ -39,7 +39,7 @@ def test_issue_record_cache_round_trip(_temp_cache_dir):
         "states": ["OPEN"],
     }
 
-    cache.save_records_cache(
+    cache_manager.save_records(
         "repo_issues",
         "org_repo",
         parameters,
@@ -48,7 +48,7 @@ def test_issue_record_cache_round_trip(_temp_cache_dir):
         use_cache=True,
     )
 
-    loaded = cache.load_records_cache(
+    loaded = cache_manager.load_records(
         "repo_issues",
         "org_repo",
         parameters,
@@ -62,12 +62,13 @@ def test_issue_record_cache_round_trip(_temp_cache_dir):
 
 def test_contributor_activity_record_cache_round_trip(_temp_cache_dir):
     """Cached contributor activity records should deserialize back correctly."""
+    cache_manager = _temp_cache_dir
     records = [
         ContributorActivityRecord(
             repo="org/repo",
             activity_type="reviewed_pull_request",
             actor="alice",
-            occurred_at=datetime(2024, 1, 2, tzinfo=UTC),
+            occurred_at=datetime(2024, 1, 2, tzinfo=timezone.utc),
             target_type="pull_request",
             target_number=10,
             target_author="bob",
@@ -80,7 +81,7 @@ def test_contributor_activity_record_cache_round_trip(_temp_cache_dir):
         "lookback_days": 30,
     }
 
-    cache.save_records_cache(
+    cache_manager.save_records(
         "repo_contributor_activity",
         "org_repo",
         parameters,
@@ -89,7 +90,7 @@ def test_contributor_activity_record_cache_round_trip(_temp_cache_dir):
         use_cache=True,
     )
 
-    loaded = cache.load_records_cache(
+    loaded = cache_manager.load_records(
         "repo_contributor_activity",
         "org_repo",
         parameters,
@@ -103,20 +104,21 @@ def test_contributor_activity_record_cache_round_trip(_temp_cache_dir):
 
 def test_stale_cache_entry_is_ignored(_temp_cache_dir):
     """Expired cache entries should be treated as misses."""
+    cache_manager = _temp_cache_dir
     records = [
         IssueRecord(
             repo="org/repo",
             number=1,
             title="Issue A",
             state="OPEN",
-            created_at=datetime(2024, 1, 1, tzinfo=UTC),
+            created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
             closed_at=None,
             labels=["bug"],
         )
     ]
     parameters = {"owner": "org", "repo": "repo", "states": []}
 
-    cache.save_records_cache(
+    cache_manager.save_records(
         "repo_issues",
         "org_repo",
         parameters,
@@ -125,12 +127,12 @@ def test_stale_cache_entry_is_ignored(_temp_cache_dir):
         use_cache=True,
     )
 
-    cache_path = cache._cache_path("repo_issues", "org_repo", parameters)
+    cache_path = next(cache_manager.cache_dir.glob("repo_issues_org_repo_*.json"))
     payload = json.loads(cache_path.read_text(encoding="utf-8"))
-    payload["cached_at"] = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    payload["cached_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     cache_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    loaded = cache.load_records_cache(
+    loaded = cache_manager.load_records(
         "repo_issues",
         "org_repo",
         parameters,
@@ -144,20 +146,21 @@ def test_stale_cache_entry_is_ignored(_temp_cache_dir):
 
 def test_naive_cached_at_is_treated_as_utc(_temp_cache_dir):
     """Naive cache timestamps should be normalized to UTC instead of failing."""
+    cache_manager = _temp_cache_dir
     records = [
         IssueRecord(
             repo="org/repo",
             number=1,
             title="Issue A",
             state="OPEN",
-            created_at=datetime(2024, 1, 1, tzinfo=UTC),
+            created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
             closed_at=None,
             labels=["bug"],
         )
     ]
     parameters = {"owner": "org", "repo": "repo", "states": []}
 
-    cache.save_records_cache(
+    cache_manager.save_records(
         "repo_issues",
         "org_repo",
         parameters,
@@ -166,12 +169,12 @@ def test_naive_cached_at_is_treated_as_utc(_temp_cache_dir):
         use_cache=True,
     )
 
-    cache_path = cache._cache_path("repo_issues", "org_repo", parameters)
+    cache_path = next(cache_manager.cache_dir.glob("repo_issues_org_repo_*.json"))
     payload = json.loads(cache_path.read_text(encoding="utf-8"))
-    payload["cached_at"] = datetime.now(UTC).replace(tzinfo=None).isoformat()
+    payload["cached_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     cache_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    loaded = cache.load_records_cache(
+    loaded = cache_manager.load_records(
         "repo_issues",
         "org_repo",
         parameters,
@@ -220,8 +223,7 @@ def test_fetch_repo_issues_graphql_uses_cache(monkeypatch, _temp_cache_dir):
         mock_client,
         "org",
         "repo",
-        use_cache=True,
-        cache_ttl_seconds=300,
+        cache_options=cache.FetchCacheOptions(use_cache=True, cache_ttl_seconds=300),
     )
 
     mock_client.graphql.reset_mock()
@@ -230,8 +232,7 @@ def test_fetch_repo_issues_graphql_uses_cache(monkeypatch, _temp_cache_dir):
         mock_client,
         "org",
         "repo",
-        use_cache=True,
-        cache_ttl_seconds=300,
+        cache_options=cache.FetchCacheOptions(use_cache=True, cache_ttl_seconds=300),
     )
 
     mock_client.graphql.assert_not_called()
@@ -248,7 +249,7 @@ def test_fetch_org_issues_graphql_uses_cached_dataset(monkeypatch, _temp_cache_d
             number=1,
             title="Issue A",
             state="OPEN",
-            created_at=datetime(2024, 1, 1, tzinfo=UTC),
+            created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
             closed_at=None,
             labels=["bug"],
         )
@@ -262,8 +263,7 @@ def test_fetch_org_issues_graphql_uses_cached_dataset(monkeypatch, _temp_cache_d
     first = ingest.fetch_org_issues_graphql(
         mock_client,
         "org",
-        use_cache=True,
-        cache_ttl_seconds=300,
+        cache_options=cache.FetchCacheOptions(use_cache=True, cache_ttl_seconds=300),
     )
 
     fetch_org_repos.reset_mock()
@@ -272,8 +272,7 @@ def test_fetch_org_issues_graphql_uses_cached_dataset(monkeypatch, _temp_cache_d
     second = ingest.fetch_org_issues_graphql(
         mock_client,
         "org",
-        use_cache=True,
-        cache_ttl_seconds=300,
+        cache_options=cache.FetchCacheOptions(use_cache=True, cache_ttl_seconds=300),
     )
 
     fetch_org_repos.assert_not_called()
@@ -291,7 +290,7 @@ def test_fetch_org_issues_graphql_sorts_states_for_cache_key(monkeypatch, _temp_
             number=1,
             title="Issue A",
             state="OPEN",
-            created_at=datetime(2024, 1, 1, tzinfo=UTC),
+                created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
             closed_at=None,
             labels=["bug"],
         )
@@ -306,8 +305,7 @@ def test_fetch_org_issues_graphql_sorts_states_for_cache_key(monkeypatch, _temp_
         mock_client,
         "org",
         states=["closed", "open"],
-        use_cache=True,
-        cache_ttl_seconds=300,
+        cache_options=cache.FetchCacheOptions(use_cache=True, cache_ttl_seconds=300),
     )
 
     fetch_org_repos.reset_mock()
@@ -317,8 +315,7 @@ def test_fetch_org_issues_graphql_sorts_states_for_cache_key(monkeypatch, _temp_
         mock_client,
         "org",
         states=["OPEN", "CLOSED"],
-        use_cache=True,
-        cache_ttl_seconds=300,
+        cache_options=cache.FetchCacheOptions(use_cache=True, cache_ttl_seconds=300),
     )
 
     fetch_org_repos.assert_not_called()

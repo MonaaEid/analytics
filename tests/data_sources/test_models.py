@@ -121,6 +121,85 @@ def test_contributor_activity_record_creation():
     assert record.target_number == 10
 
 
+def test_contributor_activity_record_from_issue_node_emits_issue_events():
+
+    node = {
+        "number": 7,
+        "createdAt": "2024-01-01T00:00:00Z",
+        "author": {"login": "alice"},
+        "comments": {
+            "nodes": [
+                {
+                    "createdAt": "2024-01-02T00:00:00Z",
+                    "author": {"login": "bob"},
+                }
+            ]
+        },
+    }
+
+    records = ContributorActivityRecord.from_github_node(
+        node,
+        {"owner": "org", "repo": "repo", "activity_source": "issue"},
+    )
+
+    assert [record.activity_type for record in records] == [
+        "created_issue",
+        "commented_issue",
+    ]
+    assert all(record.target_type == "issue" for record in records)
+
+
+def test_contributor_activity_record_from_pull_request_node_emits_comment_and_review_events():
+
+    node = {
+        "number": 11,
+        "createdAt": "2024-01-01T00:00:00Z",
+        "mergedAt": "2024-01-03T00:00:00Z",
+        "author": {"login": "alice"},
+        "mergedBy": {"login": "carol"},
+        "comments": {
+            "nodes": [
+                {
+                    "createdAt": "2024-01-02T00:00:00Z",
+                    "author": {"login": "dave"},
+                }
+            ]
+        },
+        "reviews": {
+            "nodes": [
+                {
+                    "state": "APPROVED",
+                    "submittedAt": "2024-01-02T12:00:00Z",
+                    "author": {"login": "erin"},
+                    "comments": {
+                        "nodes": [
+                            {
+                                "createdAt": "2024-01-02T12:30:00Z",
+                                "author": {"login": "frank"},
+                            }
+                        ]
+                    },
+                }
+            ]
+        },
+    }
+
+    records = ContributorActivityRecord.from_github_node(
+        node,
+        {"owner": "org", "repo": "repo", "activity_source": "pull_request"},
+    )
+
+    assert [record.activity_type for record in records] == [
+        "authored_pull_request",
+        "commented_pull_request",
+        "reviewed_pull_request",
+        "commented_pull_request_review",
+        "merged_pull_request",
+    ]
+    assert records[2].detail == "APPROVED"
+    assert records[3].detail == "APPROVED"
+
+
 # ---------------------------------------------------------
 # dataclass equality
 # ---------------------------------------------------------

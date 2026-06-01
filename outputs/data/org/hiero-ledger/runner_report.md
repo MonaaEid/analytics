@@ -16,7 +16,7 @@ This report categorizes runners into **Self-Hosted**, **Standard (GitHub-hosted)
 | **hiero-did-sdk-js** | 3 | 1 | 0 |
 | **hiero-did-sdk-python** | 0 | 7 | 0 |
 | **hiero-docs** | 0 | 1 | 0 |
-| **hiero-enterprise-java** | 0 | 7 | 1 |
+| **hiero-enterprise-java** | 0 | 8 | 1 |
 | **hiero-ethereum-execution-spec-tests** | 11 | 14 | 0 |
 | **hiero-gradle-conventions** | 4 | 0 | 0 |
 | **hiero-hederium** | 0 | 5 | 0 |
@@ -37,7 +37,7 @@ This report categorizes runners into **Self-Hosted**, **Standard (GitHub-hosted)
 | **hiero-website** | 0 | 2 | 0 |
 | **homebrew-tools** | 1 | 0 | 3 |
 | **identity-collaboration-hub** | 2 | 0 | 0 |
-| **solo** | 26 | 3 | 2 |
+| **solo** | 28 | 3 | 2 |
 | **solo-docs** | 1 | 0 | 0 |
 | **tsc** | 1 | 0 | 0 |
 

@@ -8,14 +8,15 @@ import pandas as pd
 
 from hiero_analytics.analysis.timeseries import (
     DIFFICULTY_OVER_TIME_COLUMN_ORDER,
+    issue_overlaps_window,
     get_difficulty_over_time_event_based,
 )
 from hiero_analytics.config.charts import DIFFICULTY_COLORS
 from hiero_analytics.config.paths import ORG, ensure_org_dirs
 from hiero_analytics.data_sources.github_client import GitHubClient
 from hiero_analytics.data_sources.github_ingest import (
-    fetch_org_issue_label_events_graphql,
     fetch_org_issues_graphql,
+    fetch_issue_timeline_events_graphql,
 )
 from hiero_analytics.domain.labels import (
     DIFFICULTY_ADVANCED,
@@ -51,21 +52,25 @@ def main() -> None:
     )
 
     client = GitHubClient()
-    
+
     # Fetch all issues (open and closed) to get the complete issue set.
     all_issues = fetch_org_issues_graphql(client, org=ORG, states=["OPEN", "CLOSED"])
     print(f"Fetched {len(all_issues)} total issues")
 
-    # Fetch label add/remove events (GraphQL timelineItems) to identify label
-    # application dates. Only LABELED/UNLABELED events are transferred, so this
-    # avoids the repo-wide REST event firehose and its 300-page truncation.
-    timeline_events = fetch_org_issue_label_events_graphql(
+    # Pre-filter issues that do not overlap the analysis window to reduce timeline fetches.
+    candidate_issues = [
+        issue for issue in all_issues if issue_overlaps_window(issue, start_at, end_at)
+    ]
+    print(f"Candidate issues overlapping window: {len(candidate_issues)}")
+
+    # Fetch timeline events for all issues to identify label application dates.
+    timeline_events = fetch_issue_timeline_events_graphql(
         client,
-        org=ORG,
-        states=["OPEN", "CLOSED"],
+        candidate_issues,
+        since=start_at,
         max_workers=TIMELINE_MAX_WORKERS,
     )
-    print(f"Fetched {len(timeline_events)} repository issue events")
+    print(f"Fetched {len(timeline_events)} issue timeline events")
 
     # Build event-based difficulty-over-time series.
     difficulty_over_time = pd.DataFrame(

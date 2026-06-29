@@ -6,15 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
-from hiero_analytics.domain.labels import (
-    DIFFICULTY_ADVANCED,
-    DIFFICULTY_BEGINNER,
-    DIFFICULTY_GOOD_FIRST_ISSUE,
-    DIFFICULTY_INTERMEDIATE,
-)
-from hiero_analytics.data_sources.models import IssueRecord, IssueTimelineEventRecord
 from hiero_analytics.analysis.timeseries_utils import (
     DIFFICULTY_OVER_TIME_COLUMN_ORDER as _DIFFICULTY_OVER_TIME_COLUMN_ORDER,
+)
+from hiero_analytics.analysis.timeseries_utils import (
     aggregate_intervals_to_series,
     difficulty_key,
     difficulty_key_for_label,
@@ -23,6 +18,8 @@ from hiero_analytics.analysis.timeseries_utils import (
     timeline_events_by_issue,
     weekly_sample_points,
 )
+from hiero_analytics.data_sources.models import IssueRecord, IssueTimelineEventRecord
+
 TIMELINE_EVENT_ORDER = {
     "unlabeled": 0,
     "labeled": 1,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
-from typing import Iterable, Tuple
 
 from hiero_analytics.domain.labels import (
     DIFFICULTY_ADVANCED,
@@ -74,7 +74,7 @@ def difficulty_key_for_label(label: str | None):
 
 def difficulty_key(labels: set[str]) -> str | None:
     """Return the first configured difficulty key that matches an active label set."""
-    normalized = set(labels or [])
+    normalized = {label.lower() for label in labels or []}
 
     for key, spec in _DIFFICULTY_OVER_TIME_SPECS:
         if spec.matches(normalized):
@@ -97,7 +97,7 @@ def timeline_events_by_issue(
     for key in grouped:
         grouped[key].sort(
             key=lambda event: (
-                normalize_datetime(event.occurred_at),
+                normalize_datetime(event.occurred_at) or datetime.max.replace(tzinfo=UTC),
                 event_type_order.get(event.event_type, 99)
                 if event_type_order is not None
                 else getattr(event, "event_type", ""),
@@ -108,7 +108,7 @@ def timeline_events_by_issue(
 
 
 def aggregate_intervals_to_series(
-    intervals_by_issue: Iterable[Iterable[Tuple[str, datetime, datetime]]],
+    intervals_by_issue: Iterable[Iterable[tuple[str, datetime, datetime]]],
     sample_points: Iterable[datetime],
 ) -> list[dict[str, int | str]]:
     series: list[dict[str, int | str]] = []

@@ -8,15 +8,15 @@ import pandas as pd
 
 from hiero_analytics.analysis.timeseries import (
     DIFFICULTY_OVER_TIME_COLUMN_ORDER,
-    issue_overlaps_window,
     get_difficulty_over_time_event_based,
+    issue_overlaps_window,
 )
 from hiero_analytics.config.charts import DIFFICULTY_COLORS
 from hiero_analytics.config.paths import ORG, ensure_org_dirs
 from hiero_analytics.data_sources.github_client import GitHubClient
 from hiero_analytics.data_sources.github_ingest import (
-    fetch_org_issues_graphql,
     fetch_issue_timeline_events_graphql,
+    fetch_org_issues_graphql,
 )
 from hiero_analytics.domain.labels import (
     DIFFICULTY_ADVANCED,
@@ -59,7 +59,7 @@ def main() -> None:
 
     # Pre-filter issues that do not overlap the analysis window to reduce timeline fetches.
     candidate_issues = [
-        issue for issue in all_issues if issue_overlaps_window(issue, start_at, end_at)
+        issue for issue in all_issues if issue_overlaps_window(issue, analysis_start, end_at)
     ]
     print(f"Candidate issues overlapping window: {len(candidate_issues)}")
 
@@ -67,7 +67,7 @@ def main() -> None:
     timeline_events = fetch_issue_timeline_events_graphql(
         client,
         candidate_issues,
-        since=start_at,
+        since=analysis_start,
         max_workers=TIMELINE_MAX_WORKERS,
     )
     print(f"Fetched {len(timeline_events)} issue timeline events")

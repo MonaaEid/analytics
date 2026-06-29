@@ -124,7 +124,7 @@ class IssueTimelineEventRecord:
     label: str | None = None
 
     @classmethod
-    def from_github_node(cls, node: dict, context: dict) -> list[IssueTimelineEventRecord]:
+    def from_timeline_item(cls, node: dict, context: dict) -> list[IssueTimelineEventRecord]:
         """Hydrate a normalized timeline event from a GraphQL timeline node."""
         typename = str(node.get("__typename", "")).lower()
         event_type_map = {
@@ -317,13 +317,11 @@ class ContributorActivityRecord(BaseRecord):
 
         activity_source = context.get("activity_source", "pull_request")
 
-        author_login = cls._login(node.get("author"))
-        if not author_login:
-            return []
+        pr_author = cls._login(node.get("author"))
 
         if activity_source == "issue":
             issue_number = node["number"]
-            issue_author = author_login
+            issue_author = pr_author
             issue_created_at = _parse_dt(node.get("createdAt"))
             if issue_created_at and (cutoff is None or issue_created_at >= cutoff) and issue_author:
                 records.append(
@@ -341,7 +339,6 @@ class ContributorActivityRecord(BaseRecord):
             return records
 
         pr_number = node["number"]
-        pr_author = author_login
         pr_created_at = _parse_dt(node.get("createdAt"))
         if pr_created_at and (cutoff is None or pr_created_at >= cutoff) and pr_author:
             records.append(

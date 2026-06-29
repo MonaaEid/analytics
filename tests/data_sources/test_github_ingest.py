@@ -189,11 +189,10 @@ def test_fetch_org_issues_graphql_parallel(monkeypatch, mock_client):
     ]
 
     monkeypatch.setattr(
-        ingest,
-        "fetch_org_repos_graphql",
-        lambda _client, _org: repos,
+    ingest,
+    "fetch_org_repos_graphql",
+    lambda _client, _org, cache_options=None: repos,
     )
-
     def fetch_repo_issues(_client, owner, repo, states=None, cache_options=None):
         _ = states
         return [

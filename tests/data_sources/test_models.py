@@ -172,7 +172,7 @@ def test_issue_timeline_event_record_creation():
     assert record.label == "good first issue"
 
 
-def test_issue_timeline_event_from_github_node_expands_timeline_items():
+def test_issue_timeline_event_from_issue_node_expands_timeline_items():
     """A GraphQL issue node expands its timelineItems into normalized events."""
     node = {
         "number": 42,

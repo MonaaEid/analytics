@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TypeVar
 
 import requests
@@ -138,13 +138,15 @@ def fetch_org_resource_parallel(  # noqa: UP047
         cache_parameters,
         model_class,
         use_cache=opts.use_cache,
+        ttl_seconds=opts.cache_ttl_seconds,
+        refresh=opts.refresh,
     )
     if cached is not None:
         return cached
 
     logger.info("Fetching %s across %s (max_workers=%d)", task_desc, org, max_workers)
 
-    all_repos = fetch_org_repos_graphql(client, org)
+    all_repos = fetch_org_repos_graphql(client, org, cache_options=cache_options)
 
     if repos:
         allowed = set(repos)
@@ -409,9 +411,7 @@ def fetch_repo_issue_timeline_events_graphql(
     issue_number: int,
     *,
     since: datetime | None = None,
-    use_cache: bool | None = None,
-    cache_ttl_seconds: int | None = None,
-    refresh: bool = False,
+    cache_options: FetchCacheOptions | None = None,
 ) -> list[IssueTimelineEventRecord]:
     """Fetch issue timeline events for one issue using GraphQL."""
     query = load_query("issue_timeline")
@@ -423,14 +423,15 @@ def fetch_repo_issue_timeline_events_graphql(
         "issue_number": issue_number,
         "since": since_value,
     }
-    cached = load_records_cache(
+    opts = cache.resolve_cache_options(cache_options)
+    cached = cache.load_records(
         "repo_issue_timeline_events_graphql",
         cache_scope,
         cache_parameters,
         IssueTimelineEventRecord,
-        use_cache=use_cache,
-        ttl_seconds=cache_ttl_seconds,
-        refresh=refresh,
+        use_cache=opts.use_cache,
+        ttl_seconds=opts.cache_ttl_seconds,
+        refresh=opts.refresh,
     )
     if cached is not None:
         return cached
@@ -454,18 +455,18 @@ def fetch_repo_issue_timeline_events_graphql(
         for node in nodes:
             if not isinstance(node, dict):
                 continue
-            records.extend(IssueTimelineEventRecord.from_github_node(node, context))
+            records.extend(IssueTimelineEventRecord.from_timeline_item(node, context))
 
         return records, next_cursor, has_next
 
     records = paginate_cursor(page)
-    save_records_cache(
+    cache.save_records(
         "repo_issue_timeline_events_graphql",
         cache_scope,
         cache_parameters,
         IssueTimelineEventRecord,
         records,
-        use_cache=use_cache,
+        use_cache=opts.use_cache,
     )
     return records
 

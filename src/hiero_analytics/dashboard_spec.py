@@ -43,16 +43,14 @@ CHART_MACROS = [
                     "title": "Activity networks by role",
                     "slideshow": True,
                     "description": (
-                        "Repositories linked by the people they share, one slide per group "
-                        "(maintainers, committers, triage, general contributors, and all contributors). "
-                        "Each bubble is a repo sized by that group's active members; links mean shared "
-                        "members (thicker = more). Colour = repository type. Use Prev/Next; click to enlarge."
+                        "Repositories linked by the people they share, one slide per group (maintainers, "
+                        "the smallest and most governance-relevant group, and all contributors, the widest "
+                        "view). Each bubble is a repo sized by that group's active members; links mean "
+                        "shared members (thicker = more). Colour = repository type. Use Prev/Next; click to "
+                        "enlarge."
                     ),
                     "files": [
                         ("Maintainers", "maintainer_network.png"),
-                        ("Committers", "committer_network.png"),
-                        ("Triage", "triage_network.png"),
-                        ("General contributors", "general_network.png"),
                         ("All contributors", "all_network.png"),
                     ],
                 },
@@ -167,19 +165,14 @@ CHART_MACROS = [
         "charts": {
             "hiero-ledger": [
                 {
-                    "id": "good-first-issues",
-                    "title": "Good first issues",
-                    "description": "Good-first-issue (and good-first-issue-candidate) pipeline and history.",
-                    "files": [
-                        ("GFI pipeline", "gfi_pipeline.png"),
-                        ("GFI state by year", "gfi_yearly_state_line.png"),
-                        ("GFI + GFIC by repo", "total_gfi_gfic_by_repo.png"),
-                    ],
-                },
-                {
                     "id": "issue-difficulty",
                     "title": "Issue difficulty",
-                    "description": "Difficulty mix of open issues and how it has shifted over time.",
+                    "description": (
+                        "Difficulty mix of open issues and how it has shifted over time. 'Unknown' is the "
+                        "primary onboarding/triage signal here — recently opened or unlabelled issues that "
+                        "haven't been triaged with a difficulty yet, since repos no longer rely on a "
+                        "good-first-issue-candidate label to surface onboarding-friendly work."
+                    ),
                     "files": [
                         ("By repo (30d)", "difficulty_by_repo_30_days.png"),
                         ("Distribution incl. unknown (30d)", "difficulty_distribution_with_unknown_30_days.png"),
@@ -314,23 +307,6 @@ SECTION_SPECS = [
             ("top_role", "top role"),
             ("top_pct", "top %"),
             ("top2_pct", "top-2 %"),
-        ],
-    },
-    {
-        "id": "account",
-        "file": "maintainer_activity_by_repo.csv",
-        "title": "Maintainer activity by repo (all-time)",
-        "description": "Type a name to see which repos a maintainer works in and the role they hold there.",
-        "columns": [
-            ("account", "account"),
-            ("repo", "repo"),
-            ("repo_role", "role here"),
-            ("prs_opened", "PRs"),
-            ("reviews_given", "reviews"),
-            ("merges_done", "merges"),
-            ("issues_opened", "issues"),
-            ("labels_applied", "labels"),
-            ("last_active", "last active"),
         ],
     },
     {
@@ -489,7 +465,11 @@ SECTION_SPECS = [
         "id": "teamrepo",
         "file": "team_activity_by_repo.csv",
         "title": "Team activity by repo (all-time)",
-        "description": "Which repos each team is active in — type a team or repo to filter.",
+        "description": (
+            "Which repos each team is active in — type a team or repo to filter. This is a team-wide "
+            "rollup (headcount + totals per repo); for a named maintainer's own by-repo activity, see the "
+            "'Roles and recent activity by repo' table, and for individual TSC members, see the TSC table."
+        ),
         "columns": [
             ("team", "team"),
             ("repo", "repo"),
@@ -516,7 +496,7 @@ SECTION_GROUPS = [
     # table companions to the Organisation-diversity charts.
     ("Organisation diversity", ["affiliations", "repodiversity", "teamdiversity"]),
     # Reference: who holds which role, per repo and per team.
-    ("Roles & teams", ["repo", "account", "tscrepo", "teams", "teamrepo"]),
+    ("Roles & teams", ["repo", "tscrepo", "teams", "teamrepo"]),
     # The full per-person list.
     ("All contributors", ["profiles"]),
 ]
@@ -552,18 +532,6 @@ CHART_NOTES = {
         "Each bubble is a repository, sized by how many maintainers are active in it; two repos are "
         "linked when they share a maintainer (thicker line = more shared). Bubble colour is the repo's "
         "category."
-    ),
-    "committer_network.png": (
-        "Each bubble is a repository, sized by its active committers; two repos are linked when they "
-        "share at least two committers (thicker line = more shared). Bubble colour is the repo's category."
-    ),
-    "triage_network.png": (
-        "Each bubble is a repository, sized by its active triage members; two repos are linked when they "
-        "share a triage member (thicker line = more shared). Bubble colour is the repo's category."
-    ),
-    "general_network.png": (
-        "Each bubble is a repository, sized by its general contributors (people with no governance role); "
-        "two repos are linked when they share at least four of them. Bubble colour is the repo's category."
     ),
     "all_network.png": (
         "Each bubble is a repository, sized by its active contributors; two repos are linked when they "
@@ -655,18 +623,6 @@ CHART_NOTES = {
     "push_activity.png": (
         "The share of repositories that received a push in the last 30 days (active) versus those that "
         "did not (inactive)."
-    ),
-    "gfi_pipeline.png": (
-        "Good-first-issue pipeline by year: each bar stacks candidate issues (flagged as potential "
-        "good-first-issues) and approved good-first-issues, counted by the year they were created."
-    ),
-    "gfi_yearly_state_line.png": (
-        "Good-first-issues per year — one line per issue state (e.g. open, closed) plus a total line. "
-        "Each point is the count for that year."
-    ),
-    "total_gfi_gfic_by_repo.png": (
-        "The total good-first-issue pool per repository (all-time): each bar stacks approved "
-        "good-first-issues and candidate issues."
     ),
     "difficulty_by_repo_30_days.png": (
         "Open issues per repository, stacked by difficulty level. Limited to issues labelled with a "

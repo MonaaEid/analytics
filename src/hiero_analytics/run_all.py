@@ -36,7 +36,6 @@ from hiero_analytics.run_contributor_profiles_repo import main as run_contributo
 from hiero_analytics.run_dashboard import main as run_dashboard
 from hiero_analytics.run_difficulty_org_for_repo import main as run_difficulty
 from hiero_analytics.run_difficulty_over_time_org import main as run_difficulty_over_time
-from hiero_analytics.run_gfic_gfi_org import main as run_gfic
 from hiero_analytics.run_hiero_hackers_org import main as run_hiero_hackers
 from hiero_analytics.run_maintainer_pipeline_org import main as run_maintainer
 from hiero_analytics.run_onboarding_signal_for_repo import run as run_onboarding
@@ -49,7 +48,6 @@ logger = logging.getLogger(__name__)
 # intentionally excluded: it needs manual gitignored Discord CSVs (INPUTS_DIR) and
 # cannot run unattended in CI. Add it here only if CI gains the required inputs.
 PIPELINES: list[tuple[str, Callable[[], None]]] = [
-    ("gfic_gfi", run_gfic),
     ("difficulty", run_difficulty),
     ("difficulty_over_time", run_difficulty_over_time),
     ("onboarding", run_onboarding),

@@ -25,7 +25,6 @@ import pandas as pd
 from hiero_analytics.analysis.comembership import build_comembership_network, role_membership
 from hiero_analytics.analysis.contributor_activity_profile import (
     build_account_activity_by_repo,
-    build_active_membership,
     build_contributor_profiles,
     build_contributor_profiles_by_repo,
     latest_activity_by_account,
@@ -154,20 +153,16 @@ def _write_repo_summaries(combined, org_data_dir):
     logger.info("Review load share: %d repos (>=%d review+merge in window)", len(load_share), LOAD_SHARE_MIN_ACTIONS)
 
 
-def _write_role_networks(combined, all_time_by_repo, recent_by_repo, role_lookup, org_charts_dir):
-    """Maintainer / committer / triage / general co-membership networks.
+def _write_role_networks(combined, org_charts_dir):
+    """Maintainer co-membership network.
 
-    "General" = contributors holding no governance role. The all-contributors network
-    is governance-independent and produced by run_contributor_activity_org (every org).
+    The most governance-relevant of the role networks — kept alongside the
+    all-contributors network (governance-independent, produced by
+    run_contributor_activity_org for every org) so the dashboard shows the
+    narrowest and widest view without maintaining every role's network chart.
     """
-    role_holder_logins = frozenset(u.lower() for holders in role_lookup.values() for u in holders)
-    general_membership = build_active_membership(all_time_by_repo, recent_by_repo, exclude=role_holder_logins)
-
     groups = [
         ("maintainer", "maintainers", role_membership(combined, "maintainer"), ROLE_NETWORK_MIN_SHARED["maintainer"]),
-        ("committer", "committers", role_membership(combined, "committer"), ROLE_NETWORK_MIN_SHARED["committer"]),
-        ("triage", "triage", role_membership(combined, "triage"), ROLE_NETWORK_MIN_SHARED["triage"]),
-        ("general", "general contributors", general_membership, ROLE_NETWORK_MIN_SHARED["general"]),
     ]
     for key, label, membership, min_shared in groups:
         nodes, edges = build_comembership_network(membership, min_shared=min_shared)
@@ -184,7 +179,12 @@ def _write_role_networks(combined, all_time_by_repo, recent_by_repo, role_lookup
 def _write_team_tables(
     config, role_lookup, all_time_by_repo, all_time_org_profiles, global_last_seen, org_data_dir, *, now
 ):
-    """Gone-dark holders, team-activity tables, and spotlight (maintainer/TSC) by-repo tables."""
+    """Gone-dark holders, team-activity tables, and the TSC-by-repo spotlight table.
+
+    Maintainer-by-repo activity isn't duplicated here — the "repo" dashboard table
+    (``role_coverage_all.csv``) already has repo+user+role+activity at the same
+    per-person granularity, filterable to any maintainer.
+    """
     globally_quiet = find_globally_quiet_role_holders(
         role_lookup, global_last_seen, now=now, threshold_days=GONE_DARK_DAYS
     )
@@ -201,15 +201,12 @@ def _write_team_tables(
     quiet_teams = int((team_summary["status"] == "quiet").sum()) if not team_summary.empty else 0
     logger.info("Team activity: %d teams (%d quiet)", len(team_summary), quiet_teams)
 
-    for label, members in (
-        ("maintainer", {u for h in role_lookup.values() for u, r in h.items() if r == "maintainer"}),
-        ("tsc", team_members.get("tsc", set())),
-    ):
-        table = annotate_repo_roles(build_account_activity_by_repo(members, all_time_by_repo), role_lookup)
-        filename = "maintainer_activity_by_repo.csv" if label == "maintainer" else "tsc_activity_by_repo.csv"
-        save_dataframe(table, org_data_dir / filename)
-        count = table["account"].nunique() if not table.empty else 0
-        logger.info("Wrote %s-by-repo activity for %d accounts", label, count)
+    tsc_table = annotate_repo_roles(
+        build_account_activity_by_repo(team_members.get("tsc", set()), all_time_by_repo), role_lookup
+    )
+    save_dataframe(tsc_table, org_data_dir / "tsc_activity_by_repo.csv")
+    tsc_count = tsc_table["account"].nunique() if not tsc_table.empty else 0
+    logger.info("Wrote tsc-by-repo activity for %d accounts", tsc_count)
 
 
 def main() -> None:
@@ -249,7 +246,7 @@ def main() -> None:
     if not combined.empty:
         save_dataframe(combined, org_data_dir / "role_coverage_all.csv")
         _write_repo_summaries(combined, org_data_dir)
-        _write_role_networks(combined, all_time_by_repo, recent_by_repo, role_lookup, org_charts_dir)
+        _write_role_networks(combined, org_charts_dir)
 
     _write_team_tables(
         config, role_lookup, all_time_by_repo, all_time_org_profiles, global_last_seen, org_data_dir, now=now

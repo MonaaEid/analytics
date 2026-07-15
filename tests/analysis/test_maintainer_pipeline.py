@@ -6,11 +6,16 @@ from unittest.mock import patch
 import pandas as pd
 
 from hiero_analytics.analysis.maintainer_pipeline import (
+    Granularity,
     _active_window_for_year,
     activity_to_role_dataframe,
+    build_maintainer_monthly_pipeline,
+    build_maintainer_pipeline,
     build_maintainer_repo_pipeline,
+    build_maintainer_weekly_pipeline,
     build_maintainer_yearly_pipeline,
     collapse_repo_pipeline_tail,
+    recent_buckets,
 )
 from hiero_analytics.data_sources.models import ContributorActivityRecord
 
@@ -77,6 +82,21 @@ def test_activity_to_role_dataframe_matches_actor_case_insensitively():
     df = activity_to_role_dataframe(records, {"repo-a": {"alice": "maintainer"}})
 
     assert df.iloc[0]["stage"] == "maintainer"
+
+
+def test_activity_to_role_dataframe_excludes_bots():
+    """Automation accounts aren't people and must be dropped from the pipeline."""
+    records = [
+        _record("authored_pull_request", "alice", "org/repo-a", 2024),
+        _record("authored_pull_request", "dependabot[bot]", "org/repo-a", 2024),
+        _record("merged_pull_request", "dependabot", "org/repo-a", 2024),
+        _record("reviewed_pull_request", "some-bot", "org/repo-a", 2024),
+        _record("authored_issue", "github-actions", "org/repo-a", 2024, target_type="issue"),
+    ]
+
+    df = activity_to_role_dataframe(records, {})
+
+    assert list(df["actor"]) == ["alice"]
 
 
 def test_build_maintainer_yearly_pipeline_counts_unique_actors_per_stage():
@@ -266,3 +286,234 @@ def test_collapse_repo_pipeline_tail_noop_when_below_limit():
     collapsed = collapse_repo_pipeline_tail(repo_df, max_repos=5)
 
     assert collapsed.equals(repo_df)
+
+
+# ---------------------------------------------------------------------------
+# build_maintainer_monthly_pipeline
+# ---------------------------------------------------------------------------
+
+
+def test_monthly_pipeline_counts_unique_actors():
+    """Monthly rollups should count unique actors once per month by highest role."""
+    now = datetime.now(UTC)
+    role_lookup = {"repo-a": {"alice": "maintainer", "bob": "general_user"}}
+    records = [
+        _record("authored_pull_request", "alice", "org/repo-a", now.year, month=now.month),
+        _record("reviewed_pull_request", "alice", "org/repo-a", now.year, month=now.month),
+        _record("authored_pull_request", "bob", "org/repo-a", now.year, month=now.month),
+    ]
+
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+    monthly = build_maintainer_monthly_pipeline(stage_df)
+
+    assert len(monthly) >= 1
+    row = monthly.iloc[-1]  # most recent month
+    assert row["maintainer"] == 1
+    assert row["general_user"] == 1
+
+
+def test_monthly_pipeline_empty_input():
+    """Empty input should produce an empty DataFrame with correct columns."""
+    stage_df = pd.DataFrame(columns=["repo", "actor", "occurred_at", "year", "stage"])
+    monthly = build_maintainer_monthly_pipeline(stage_df)
+
+    assert list(monthly.columns) == ["month", "general_user", "triage", "committer", "maintainer"]
+    assert monthly.empty
+
+
+def test_monthly_pipeline_multiple_months():
+    """Records in different months should produce separate rows."""
+    role_lookup = {"repo-a": {}}
+    records = [
+        _record("authored_pull_request", "alice", "org/repo-a", 2024, month=7),
+        _record("authored_pull_request", "bob", "org/repo-a", 2024, month=8),
+    ]
+
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+    monthly = build_maintainer_monthly_pipeline(stage_df)
+
+    assert len(monthly) == 2
+    assert "2024-07" in monthly["month"].values
+    assert "2024-08" in monthly["month"].values
+
+
+def test_monthly_pipeline_current_month_is_month_to_date_not_trailing():
+    """The current month is counted month-to-date, not as a 6-month trailing window.
+
+    Activity from earlier periods must land in its own bucket and never leak into
+    the current month's count.
+    """
+    now = datetime.now(UTC)
+    role_lookup = {"repo-a": {}}
+    records = [
+        _record("authored_pull_request", "current_person", "org/repo-a", now.year, month=now.month),
+        _record("authored_pull_request", "old_person", "org/repo-a", 2020, month=1),
+    ]
+
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+    monthly = build_maintainer_monthly_pipeline(stage_df)
+
+    current_label = f"{now.year:04d}-{now.month:02d}"
+    current_row = monthly[monthly["month"] == current_label].iloc[0]
+
+    assert current_row["general_user"] == 1  # only the current-month contributor
+    assert "2020-01" in monthly["month"].values  # older activity stays in its own bucket
+
+
+# ---------------------------------------------------------------------------
+# build_maintainer_weekly_pipeline
+# ---------------------------------------------------------------------------
+
+
+def test_weekly_pipeline_counts_unique_actors():
+    """Weekly rollups should count unique actors once per week by highest role."""
+    now = datetime.now(UTC)
+    role_lookup = {"repo-a": {"alice": "committer", "bob": "general_user"}}
+    records = [
+        _record("authored_pull_request", "alice", "org/repo-a", now.year, month=now.month),
+        _record("authored_pull_request", "bob", "org/repo-a", now.year, month=now.month),
+    ]
+
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+    weekly = build_maintainer_weekly_pipeline(stage_df)
+
+    assert len(weekly) >= 1
+    row = weekly.iloc[-1]
+    assert row["committer"] == 1
+    assert row["general_user"] == 1
+
+
+def test_weekly_pipeline_empty_input():
+    """Empty input should produce an empty DataFrame with correct columns."""
+    stage_df = pd.DataFrame(columns=["repo", "actor", "occurred_at", "year", "stage"])
+    weekly = build_maintainer_weekly_pipeline(stage_df)
+
+    assert list(weekly.columns) == ["week", "general_user", "triage", "committer", "maintainer"]
+    assert weekly.empty
+
+
+def test_weekly_pipeline_iso_week_labels():
+    """Week labels should follow ISO-week format YYYY-Www."""
+    role_lookup = {"repo-a": {}}
+    # 2024-07-01 is a Monday (2024-W27)
+    records = [
+        _record("authored_pull_request", "alice", "org/repo-a", 2024, month=7),
+    ]
+
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+    weekly = build_maintainer_weekly_pipeline(stage_df)
+
+    assert len(weekly) >= 1
+    # ISO week label for July 1 2024 (Monday) is 2024-W27
+    assert weekly.iloc[0]["week"] == "2024-W27"
+
+
+def test_weekly_pipeline_counts_each_week_separately():
+    """Weekly counts are strictly per-week — one week's activity never leaks into another."""
+    role_lookup = {"repo-a": {}}
+    records = [
+        _record("authored_pull_request", "alice", "org/repo-a", 2024, month=7),  # 2024-W27
+        _record("authored_pull_request", "bob", "org/repo-a", 2020, month=1),  # 2020-W01
+    ]
+
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+    weekly = build_maintainer_weekly_pipeline(stage_df)
+
+    assert len(weekly) == 2
+    assert set(weekly["general_user"]) == {1}  # each week has only its own contributor
+    assert "2024-W27" in weekly["week"].values
+    assert "2020-W01" in weekly["week"].values
+
+
+# ---------------------------------------------------------------------------
+# build_maintainer_pipeline (dispatch)
+# ---------------------------------------------------------------------------
+
+
+def test_pipeline_dispatch_year():
+    """Granularity.YEAR should dispatch to yearly builder."""
+    role_lookup = {"repo-a": {}}
+    records = [_h2_record("authored_pull_request", "alice", "org/repo-a", 2024)]
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+
+    result = build_maintainer_pipeline(stage_df, Granularity.YEAR)
+    assert "year" in result.columns
+
+
+def test_pipeline_dispatch_month():
+    """Granularity.MONTH should dispatch to monthly builder."""
+    role_lookup = {"repo-a": {}}
+    records = [_h2_record("authored_pull_request", "alice", "org/repo-a", 2024)]
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+
+    result = build_maintainer_pipeline(stage_df, Granularity.MONTH)
+    assert "month" in result.columns
+
+
+def test_pipeline_dispatch_week():
+    """Granularity.WEEK should dispatch to weekly builder."""
+    role_lookup = {"repo-a": {}}
+    records = [_h2_record("authored_pull_request", "alice", "org/repo-a", 2024)]
+    stage_df = activity_to_role_dataframe(records, role_lookup)
+
+    result = build_maintainer_pipeline(stage_df, Granularity.WEEK)
+    assert "week" in result.columns
+
+
+# ---------------------------------------------------------------------------
+# recent_buckets
+# ---------------------------------------------------------------------------
+
+
+def _month_pipeline(n: int) -> pd.DataFrame:
+    """Build a chronologically-sorted monthly pipeline table with ``n`` rows."""
+    rows = [
+        {"month": f"2024-{m:02d}", "general_user": m, "triage": 0, "committer": 0, "maintainer": 0}
+        for m in range(1, n + 1)
+    ]
+    return pd.DataFrame(rows)
+
+
+def test_recent_buckets_keeps_only_most_recent():
+    """recent_buckets should return the tail (newest) rows in chronological order."""
+    pipeline = _month_pipeline(12)
+
+    trimmed = recent_buckets(pipeline, 3)
+
+    assert list(trimmed["month"]) == ["2024-10", "2024-11", "2024-12"]
+    assert list(trimmed.index) == [0, 1, 2]  # index reset
+
+
+def test_recent_buckets_newest_first_reverses_order():
+    """newest_first should return the most recent buckets in reverse-chronological order."""
+    pipeline = _month_pipeline(12)
+
+    trimmed = recent_buckets(pipeline, 3, newest_first=True)
+
+    assert list(trimmed["month"]) == ["2024-12", "2024-11", "2024-10"]
+    assert list(trimmed.index) == [0, 1, 2]  # index reset
+
+
+def test_recent_buckets_noop_when_within_limit():
+    """A table already within the limit should be returned unchanged."""
+    pipeline = _month_pipeline(3)
+
+    trimmed = recent_buckets(pipeline, 24)
+
+    assert trimmed.equals(pipeline)
+
+
+def test_recent_buckets_empty_input():
+    """Empty input should be returned as-is."""
+    pipeline = pd.DataFrame(columns=["month", "general_user", "triage", "committer", "maintainer"])
+
+    trimmed = recent_buckets(pipeline, 24)
+
+    assert trimmed.empty
+
+
+def test_recent_buckets_non_positive_limit_is_noop():
+    """A non-positive limit should not trim the table."""
+    pipeline = _month_pipeline(5)
+
+    assert recent_buckets(pipeline, 0).equals(pipeline)

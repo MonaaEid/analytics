@@ -40,7 +40,7 @@ import hiero_analytics.pipelines.onboarding as onboarding_mod
 import hiero_analytics.pipelines.role_coverage as role_coverage_mod
 import hiero_analytics.pipelines.run_all as run_all
 import hiero_analytics.pipelines.scorecard as scorecard_mod
-from hiero_analytics.dashboard_spec import CHART_MACROS, SECTION_SPECS
+from hiero_analytics.dashboard_spec import CHART_MACROS, TABLE_FAMILIES
 from hiero_analytics.data_sources.models import (
     CodeOwnersRecord,
     ContributorActivityRecord,
@@ -52,6 +52,9 @@ from hiero_analytics.data_sources.models import (
     ScorecardRecord,
 )
 from hiero_analytics.domain.periods import ACTIVITY_PERIODS
+
+# Every table section across the table-bearing macros (Contributors, Governance).
+ALL_SECTION_SPECS = [spec for family in TABLE_FAMILIES.values() for spec in family.SECTION_SPECS]
 
 PRIMARY = "hiero-ledger"
 HACKERS = "hiero-hackers"
@@ -85,6 +88,7 @@ CHART_COMPANION_CSVS = {
     "difficulty_by_repo_30_days.csv",
     "difficulty_over_time_event_based_weekly.csv",
     "maintainer_activity_events.csv",
+    "gfi_completers.csv",  # Contributors-tab KPI tile source (completed-a-GFI %)
     "maintainer_pipeline_yearly.csv",
     "maintainer_pipeline_monthly.csv",
     "maintainer_pipeline_weekly.csv",
@@ -192,10 +196,17 @@ GOVERNANCE = {
         # Five resolved, recently active members so the team-composition charts
         # (which need >= 4 resolved members) render in both All and Active views.
         {"name": "core", "maintainers": [], "members": ["alice", "bob", "carol", "dave", "erin"]},
+        # Write- and triage-permission teams so the committer and triage role
+        # networks (Governance tab) have holders to render.
+        {"name": "sdk-devs", "maintainers": [], "members": ["bob", "dave"]},
+        {"name": "triagers", "maintainers": [], "members": ["erin"]},
     ],
     "repositories": [
-        {"name": "sdk-python", "teams": {"sdk-python-maintainers": "maintain"}},
-        {"name": "sdk-java", "teams": {"sdk-java-maintainers": "maintain"}},
+        {
+            "name": "sdk-python",
+            "teams": {"sdk-python-maintainers": "maintain", "sdk-devs": "write", "triagers": "triage"},
+        },
+        {"name": "sdk-java", "teams": {"sdk-java-maintainers": "maintain", "sdk-devs": "write"}},
     ],
 }
 
@@ -260,6 +271,7 @@ def outputs_root(tmp_path_factory) -> Path:
         mp.setattr(onboarding_mod, "fetch_repo_issues_graphql", lambda _c, **_k: REPO_ISSUES)
         mp.setattr(onboarding_mod, "fetch_repo_merged_pr_difficulty_graphql", lambda _c, **_k: REPO_PRS)
         mp.setattr(profiles_mod, "fetch_repo_merged_pr_difficulty_graphql", lambda _c, **_k: REPO_PRS)
+        mp.setattr(activity_mod, "fetch_org_merged_pr_difficulty_graphql", lambda _c, _org, **_k: REPO_PRS)
         for mod in (maintainer_mod, heatmap_mod, role_coverage_mod, affiliation_mod):
             mp.setattr(mod, "fetch_governance_config", lambda *_a, **_k: GOVERNANCE)
         for mod in (maintainer_mod, heatmap_mod, role_coverage_mod, affiliation_mod, activity_mod):
@@ -333,7 +345,7 @@ def test_every_spec_table_csv_is_produced(outputs_root: Path):
     """Each section's CSV (and every derived period variant) exists for the primary org."""
     org_data = outputs_root / "data" / "org" / PRIMARY
     missing = []
-    for spec in SECTION_SPECS:
+    for spec in ALL_SECTION_SPECS:
         expected = [spec["file"]]
         if spec.get("periods"):
             stem = Path(spec["file"]).stem
@@ -357,7 +369,7 @@ def test_every_spec_chart_png_is_produced(outputs_root: Path):
 def test_no_orphan_org_level_outputs(outputs_root: Path):
     """Everything produced at org level is spec-listed or explicitly accounted for."""
     spec_csvs = set()
-    for spec in SECTION_SPECS:
+    for spec in ALL_SECTION_SPECS:
         spec_csvs.add(spec["file"])
         if spec.get("periods"):
             stem = Path(spec["file"]).stem
@@ -388,7 +400,8 @@ def test_no_orphan_org_level_outputs(outputs_root: Path):
 
 
 def test_dashboard_html_is_written(outputs_root: Path):
-    """The assembled dashboard exists and carries the macro tabs."""
+    """The assembled dashboard exists and carries both table-bearing macro tabs."""
     html = (outputs_root / "dashboard.html").read_text(encoding="utf-8")
-    assert "Contributors &amp; governance" in html or "Contributors & governance" in html
+    assert ">Contributors<" in html  # the people/activity macro button
+    assert ">Governance<" in html  # the authority/risk macro button
     assert len(html) > 10_000

@@ -40,19 +40,19 @@ DIFFICULTY_OVER_TIME_LABELS = [
 logger = logging.getLogger(__name__)
 
 
-def main() -> None:
+def main(org: str = ORG) -> None:
     """Generate an org-wide event-based difficulty-over-time chart."""
-    org_data_dir, org_charts_dir = ensure_org_dirs(ORG)
+    org_data_dir, org_charts_dir = ensure_org_dirs(org)
     end_at = datetime.now(UTC)
     start_at = end_at - timedelta(days=DIFFICULTY_OVER_TIME_WINDOW_DAYS)
 
-    logger.info("Running event-based difficulty-over-time analytics for org: %s", ORG)
+    logger.info("Running event-based difficulty-over-time analytics for org: %s", org)
     logger.info(f"Window: {start_at.date().isoformat()} to {end_at.date().isoformat()}")
 
     client = GitHubClient()
 
     # Fetch all issues (open and closed) to get the complete issue set.
-    all_issues = fetch_org_issues_graphql(client, org=ORG, states=["OPEN", "CLOSED"])
+    all_issues = fetch_org_issues_graphql(client, org=org, states=["OPEN", "CLOSED"])
     logger.info("Fetched %d total issues", len(all_issues))
 
     # Fetch label add/remove events (GraphQL timelineItems) to identify label
@@ -60,7 +60,7 @@ def main() -> None:
     # avoids the repo-wide REST event firehose and its 300-page truncation.
     timeline_events = fetch_org_issue_label_events_graphql(
         client,
-        org=ORG,
+        org=org,
         states=["OPEN", "CLOSED"],
         max_workers=TIMELINE_MAX_WORKERS,
     )

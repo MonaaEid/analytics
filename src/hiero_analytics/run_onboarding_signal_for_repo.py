@@ -29,9 +29,6 @@ from hiero_analytics.plotting.base import create_figure, finalize_chart
 from hiero_analytics.plotting.primitives import annotate_endpoint_badge
 from hiero_analytics.plotting.scatter import plot_scatter_with_regression
 
-ORG_NAME = ORG
-short_repo = bare_repo(REPO)
-
 logger = logging.getLogger(__name__)
 
 
@@ -74,18 +71,20 @@ def plot_issue_vs_contributors(
     )
 
 
-def run():
+def run(org: str = ORG, repo: str = REPO):
     """Fetch onboarding data for the configured repository and generate charts."""
+    short_repo = bare_repo(repo)
+
     client = GitHubClient()
-    repo_data_dir, repo_charts_dir = ensure_repo_dirs(f"{ORG_NAME}/{REPO}")
+    repo_data_dir, repo_charts_dir = ensure_repo_dirs(f"{org}/{repo}")
 
     # ----------------------------------------
     # GFI supply (issues)
     # ----------------------------------------
     issues = fetch_repo_issues_graphql(
         client,
-        owner=ORG_NAME,
-        repo=REPO,
+        owner=org,
+        repo=repo,
         states=["OPEN", "CLOSED"],
     )
 
@@ -99,8 +98,8 @@ def run():
     # ----------------------------------------
     prs = fetch_repo_merged_pr_difficulty_graphql(
         client,
-        owner=ORG_NAME,
-        repo=REPO,
+        owner=org,
+        repo=repo,
     )
 
     pr_df = prs_to_dataframe(prs)

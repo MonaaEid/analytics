@@ -8,6 +8,7 @@ per-section search and click-to-sort, so the file works fully offline.
 from __future__ import annotations
 
 import html
+import json
 import math
 import re
 from collections.abc import Mapping, Sequence
@@ -145,7 +146,22 @@ def _charts_section_html(section: Mapping, esc) -> str:
     )
 
 
-def _table_view_html(section_id: str, columns: Sequence[tuple[str, str]], rows: Sequence[Mapping], esc) -> str:
+def _table_view_html(
+    section_id: str,
+    columns: Sequence[tuple[str, str]],
+    rows: Sequence[Mapping],
+    esc,
+    *,
+    title: str = "",
+    data_as_of: str = "",
+) -> str:
+    """Render one filterable, sortable, exportable table view.
+
+    ``title``/``data_as_of`` and the row total ride along as data attributes so
+    the CSV export can stamp them into the downloaded file. The export takes the
+    *visible* rows, so a filtered download is a subset — the total is what lets
+    the file say so rather than passing itself off as the whole table.
+    """
     head = "".join(
         f"<th onclick=\"sortTable('{section_id}',{i},this)\">{esc(label)}</th>"
         for i, (_key, label) in enumerate(columns)
@@ -155,9 +171,10 @@ def _table_view_html(section_id: str, columns: Sequence[tuple[str, str]], rows: 
     )
     return (
         f"<button class='dl' onclick=\"exportCSV('{section_id}','{section_id}.csv')\">Download CSV</button>"
-        f"<input class='search' placeholder='Filter…' "
+        f"<input class='search' id='{section_id}-q' placeholder='Filter…' "
         f"oninput=\"filterTable('{section_id}',this.value)\">"
-        f"<div class='tablewrap'><table id='{section_id}'><thead><tr>{head}</tr></thead>"
+        f"<div class='tablewrap'><table id='{section_id}' data-title=\"{esc(title)}\" "
+        f"data-asof=\"{esc(data_as_of)}\" data-total='{len(rows)}'><thead><tr>{head}</tr></thead>"
         f"<tbody>{body}</tbody></table></div>"
         f"<p class='count' id='{section_id}-count'>{len(rows)} rows</p>"
     )
@@ -189,12 +206,29 @@ def _section_html(section: Mapping, esc) -> str:
         )
         tables = "".join(
             ("<div class='periodview'>" if i == active_idx else "<div class='periodview' style='display:none'>")
-            + f"{_table_view_html(f'{section_id}-period-{i}', variant['columns'], variant['rows'], esc)}</div>"
+            + _table_view_html(
+                f"{section_id}-period-{i}",
+                variant["columns"],
+                variant["rows"],
+                esc,
+                # Each period is a different row set, so the export has to name
+                # which one it is — "Contributors.csv" alone is ambiguous.
+                title=f"{section['title']} — {variant['label']}",
+                data_as_of=section.get("data_as_of", ""),
+            )
+            + "</div>"
             for i, variant in enumerate(variants)
         )
         content = f"<div class='periodtabs'>{tabs}</div>{tables}"
     else:
-        content = _table_view_html(section_id, section["columns"], section["rows"], esc)
+        content = _table_view_html(
+            section_id,
+            section["columns"],
+            section["rows"],
+            esc,
+            title=section["title"],
+            data_as_of=section.get("data_as_of", ""),
+        )
     return (
         f"<details class='card tsec' open>"
         f"<summary class='tsum'><h2>{esc(section['title'])}</h2>"
@@ -273,7 +307,12 @@ def _org_panels_html(mslug: str, org_tabs: Sequence[Mapping], esc) -> str:
     return tab_bar + "".join(panels)
 
 
-def build_dashboard_html(macros: Sequence[Mapping], *, generated_at: str | None = None) -> str:
+def build_dashboard_html(
+    macros: Sequence[Mapping],
+    *,
+    generated_at: str | None = None,
+    git_sha: str | None = None,
+) -> str:
     """Build a self-contained, two-level (macro → org → section) HTML document.
 
     ``macros`` is a list of ``{name, org_tabs}``; each macro is a dashboard family
@@ -284,9 +323,14 @@ def build_dashboard_html(macros: Sequence[Mapping], *, generated_at: str | None 
     the org tab bar shows only with more than one org. The column glossary appears
     only inside macros that have a table section. Section ids are namespaced per
     macro+org so filter/sort/export stay independent. All values are HTML-escaped.
+
+    ``git_sha`` stamps the revision that built the page. Each deploy overwrites
+    the last and nothing is committed, so without it a reader comparing two
+    dashboards cannot tell whether the data moved or the code did.
     """
     esc = html.escape
     stamp = f" · generated {esc(generated_at)}" if generated_at else ""
+    stamp += f" · code {esc(git_sha)}" if git_sha else ""
     header = (
         "<h1>Hiero — analytics dashboard</h1>"
         f"<p class='sub'>Generated locally{stamp} · open in any browser · type to filter tables, "
@@ -329,9 +373,14 @@ def build_dashboard_html(macros: Sequence[Mapping], *, generated_at: str | None 
         "&ldquo;Suggest a correction&rdquo; link.</footer>"
     )
     body = header + macro_bar + "".join(macro_panels) + footer + lightbox
+    # Page-level provenance for the CSV export. A downloaded file leaves the
+    # dashboard behind entirely, so the stamp has to be written into the file —
+    # `json.dumps` rather than string interpolation because these values end up
+    # inside a <script> block.
+    provenance_js = "var PROVENANCE=" + json.dumps({"generated": generated_at or "", "sha": git_sha or ""}) + ";"
     return (
         "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>Hiero analytics dashboard</title><style>{_CSS}</style></head>"
-        f"<body>{body}<script>{_JS}</script></body></html>"
+        f"<body>{body}<script>{provenance_js}{_JS}</script></body></html>"
     )

@@ -145,6 +145,10 @@ def plot_onboarding_signal(
         output_path=output_path,
         legend=False,
         grid_axis="y",
+        # Both axes are stamped separately. A single figure for the two series
+        # would let one collapse while the total held steady — exactly what the
+        # count is here to expose.
+        record_count={"GFIs": len(gfi), "contributors": len(contrib)},
     )
 
 

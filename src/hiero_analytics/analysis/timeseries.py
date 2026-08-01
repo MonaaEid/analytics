@@ -22,19 +22,25 @@ TIMELINE_EVENT_ORDER = {
     "reopened": 3,
 }
 
-DIFFICULTY_OVER_TIME_COLUMN_ORDER = [
-    "gfi",
-    "beginner",
-    "intermediate",
-    "advanced",
-]
+# Bucket key for issues without a recognised difficulty label. Deliberately a
+# local column key (like "gfi"), not the display name from domain.labels.
+UNKNOWN_KEY = "unknown"
 
+# Single source for the series' bucket keys: column orders and zeroed rows all
+# derive from this table, so adding a difficulty means adding one entry here.
 _DIFFICULTY_OVER_TIME_SPECS = (
     ("gfi", DIFFICULTY_GOOD_FIRST_ISSUE),
     ("beginner", DIFFICULTY_BEGINNER),
     ("intermediate", DIFFICULTY_INTERMEDIATE),
     ("advanced", DIFFICULTY_ADVANCED),
 )
+
+DIFFICULTY_OVER_TIME_COLUMN_ORDER = [key for key, _ in _DIFFICULTY_OVER_TIME_SPECS]
+
+DIFFICULTY_OVER_TIME_ALL_COLUMN_ORDER = [
+    UNKNOWN_KEY,
+    *DIFFICULTY_OVER_TIME_COLUMN_ORDER,
+]
 
 
 def normalize_datetime(value: datetime | None) -> datetime | None:
@@ -67,10 +73,7 @@ def init_row_for_sample(sample_point: datetime) -> dict[str, int | str]:
     """Return a zeroed-out difficulty row dict for a given sample point."""
     return {
         "date": sample_point.date().isoformat(),
-        "gfi": 0,
-        "beginner": 0,
-        "intermediate": 0,
-        "advanced": 0,
+        **dict.fromkeys(DIFFICULTY_OVER_TIME_ALL_COLUMN_ORDER, 0),
     }
 
 
@@ -129,36 +132,47 @@ def _resolve_entry_points(
     issues: list[IssueRecord],
     events_by_issue: dict[tuple[str, int], list[IssueTimelineEventRecord]],
     end_at: datetime,
+    *,
+    include_unknown: bool = False,
 ) -> dict[tuple[str, int], tuple[str, datetime]]:
-    """Map each issue to the (difficulty bucket, label timestamp) it enters the series with.
+    """Map each issue to the (difficulty bucket, entry timestamp) it enters the series with.
 
-    Issues with no current difficulty label, no recorded label event matching it,
-    or a label event after the window are excluded — every entry point must be
-    grounded in a recorded event.
+    Issues with a difficulty label enter their difficulty bucket at the most
+    recent recorded label event matching it; without ``include_unknown``,
+    issues with no such datable event — unlabelled, no matching event, or an
+    event after the window — are excluded, so every entry point is grounded in
+    a recorded event. With ``include_unknown``, those issues enter the
+    ``unknown`` bucket from their creation date instead: a difficulty whose
+    application date isn't recoverable can't be honestly placed on the
+    timeline, but the issue is still an open, untriaged-looking one.
     """
     entry_points: dict[tuple[str, int], tuple[str, datetime]] = {}
 
     for issue in issues:
         current_difficulty = difficulty_key(set(issue.labels or []))
-        if current_difficulty is None:
+
+        # Find the most recent labeled event matching the current difficulty.
+        label_timestamp: datetime | None = None
+        if current_difficulty is not None:
+            issue_events = events_by_issue.get((issue.repo, issue.number), [])
+            for event in reversed(issue_events):
+                if event.event_type == "labeled" and difficulty_key_for_label(event.label) == current_difficulty:
+                    label_timestamp = normalize_datetime(event.occurred_at)
+                    break
+
+        if current_difficulty is not None and label_timestamp is not None and label_timestamp <= end_at:
+            entry_points[(issue.repo, issue.number)] = (current_difficulty, label_timestamp)
             continue
 
-        issue_events = events_by_issue.get((issue.repo, issue.number), [])
-
-        # Find the most recent labeled event for this difficulty.
-        most_recent_label_event: IssueTimelineEventRecord | None = None
-        for event in reversed(issue_events):
-            if event.event_type == "labeled" and difficulty_key_for_label(event.label) == current_difficulty:
-                most_recent_label_event = event
-                break
-        if most_recent_label_event is None:
+        # Unlabelled, or labelled with no datable in-window label event: no
+        # anchor for a difficulty band, so (opt-in) count the issue as unknown
+        # from its creation date.
+        if not include_unknown:
             continue
-
-        label_timestamp = normalize_datetime(most_recent_label_event.occurred_at)
-        if label_timestamp is None or label_timestamp > end_at:
+        entry_timestamp = normalize_datetime(issue.created_at)
+        if entry_timestamp is None or entry_timestamp > end_at:
             continue
-
-        entry_points[(issue.repo, issue.number)] = (current_difficulty, label_timestamp)
+        entry_points[(issue.repo, issue.number)] = (UNKNOWN_KEY, entry_timestamp)
 
     return entry_points
 
@@ -169,6 +183,7 @@ def get_difficulty_over_time_event_based(
     *,
     start_at: datetime,
     today: datetime | None = None,
+    include_unknown: bool = False,
 ) -> list[dict[str, str | int]]:
     """
     Build weekly open-issue counts using only event-based forward tracking.
@@ -177,11 +192,15 @@ def get_difficulty_over_time_event_based(
     - Only include issues created within the observation window.
     - Use the label application date (most recent labeled event) as the entry point.
     - Track forward only from the label event to the end of the window.
-    - Exclude issues with no difficulty label event in the timeline.
+    - Exclude issues with no difficulty label event in the timeline, unless
+      ``include_unknown`` is set — then issues without a difficulty label (or
+      whose label application date isn't recoverable from events) are counted
+      in an ``unknown`` bucket from their creation date onward.
 
     This approach avoids reconstructing historical state or mixing present-day
-    snapshot data with historical events. Every data point is grounded in a
-    recorded event.
+    snapshot data with historical events. Every difficulty data point is
+    grounded in a recorded event; only the ``unknown`` bucket (opt-in) uses the
+    creation date, because those issues have no label event to anchor on.
     """
     if not issues:
         return []
@@ -213,7 +232,9 @@ def get_difficulty_over_time_event_based(
     )
 
     # For each issue, find the most recent labeled event for its current difficulty.
-    issue_entry_points = _resolve_entry_points(filtered_issues, events_by_issue, end_at)
+    issue_entry_points = _resolve_entry_points(
+        filtered_issues, events_by_issue, end_at, include_unknown=include_unknown
+    )
 
     if not issue_entry_points:
         return []

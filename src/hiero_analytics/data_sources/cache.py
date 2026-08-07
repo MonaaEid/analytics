@@ -1,4 +1,16 @@
-"""File-backed cache helpers for normalized GitHub data records."""
+"""File-backed cache helpers for normalized GitHub data records.
+
+Freshness is governed by ``GITHUB_CACHE_TTL_SECONDS`` or the
+``ttl_seconds`` override. A positive value expires cache entries older
+than the configured number of seconds. A value of ``0`` or less
+disables expiry and keeps cache entries indefinitely until the cache
+directory is cleared manually. This behavior is intended as an explicit
+"cache forever" mode (for example, during offline debugging).
+
+Because an empty or invalid environment variable also resolves to
+``0``, the cache logs a warning when non-positive TTL mode is active so
+the configuration is explicit and visible.
+"""
 
 from __future__ import annotations
 
@@ -35,13 +47,29 @@ def _cache_enabled(use_cache: bool | None) -> bool:
 
 
 def _cache_ttl_seconds(ttl_seconds: int | None) -> int:
-    """Resolve the effective cache TTL in seconds."""
+    """Resolve the effective cache TTL in seconds.
+
+    A resolved value of ``0`` or less disables cache expiry (see the module
+    docstring). Because an empty or invalid ``GITHUB_CACHE_TTL_SECONDS`` value
+    can also resolve to ``0``, a warning is logged whenever non-positive TTL
+    mode is active.
+    """
     if ttl_seconds is not None:
-        return ttl_seconds
-    return env_int(
-        "GITHUB_CACHE_TTL_SECONDS",
-        DEFAULT_GITHUB_CACHE_TTL_SECONDS,
-    )
+        resolved = ttl_seconds
+    else:
+        resolved = env_int(
+            "GITHUB_CACHE_TTL_SECONDS",
+            DEFAULT_GITHUB_CACHE_TTL_SECONDS,
+        )
+
+    if resolved <= 0:
+        logger.warning(
+            "Cache TTL resolved to %d (<=0); cache expiry is disabled. "
+            "Entries will remain until the cache directory is cleared manually.",
+            resolved,
+        )
+
+    return resolved
 
 
 def _slugify(value: str) -> str:
@@ -84,6 +112,7 @@ def load_records_cache(  # noqa: UP047
     if not _cache_enabled(use_cache):
         return None
 
+    effective_ttl_seconds = _cache_ttl_seconds(ttl_seconds)
     cache_path = _cache_path(kind, scope, parameters)
     if refresh or not cache_path.exists():
         return None
@@ -120,7 +149,6 @@ def load_records_cache(  # noqa: UP047
         logger.info("Ignoring cache file with invalid timestamp: %s", cache_path)
         return None
 
-    effective_ttl_seconds = _cache_ttl_seconds(ttl_seconds)
     if effective_ttl_seconds > 0:
         age_seconds = (datetime.now(UTC) - cached_at).total_seconds()
         if age_seconds > effective_ttl_seconds:

@@ -41,6 +41,11 @@ def test_snapshot_from_rest_headers_malformed_returns_none():
     assert RateLimitSnapshot.from_rest_headers({"X-RateLimit-Remaining": "not-a-number"}) is None
 
 
+def test_snapshot_from_rest_headers_out_of_range_reset_returns_none():
+    """A reset epoch beyond the platform range is a missing snapshot, not a crash."""
+    assert RateLimitSnapshot.from_rest_headers({"X-RateLimit-Reset": "99999999999999999"}) is None
+
+
 def test_snapshot_from_graphql_payload_reads_ratelimit_block():
     """A GraphQL rateLimit block becomes a snapshot including query cost."""
     snap = RateLimitSnapshot.from_graphql_payload(
@@ -53,6 +58,12 @@ def test_snapshot_from_graphql_payload_reads_ratelimit_block():
 def test_snapshot_from_graphql_payload_without_ratelimit_returns_none():
     """A query that didn't request rateLimit yields no snapshot."""
     assert RateLimitSnapshot.from_graphql_payload({"data": {"viewer": {"login": "x"}}}) is None
+
+
+def test_snapshot_from_graphql_payload_with_malformed_shape_returns_none():
+    """A non-mapping data or rateLimit block is ignored instead of raising."""
+    assert RateLimitSnapshot.from_graphql_payload({"data": {"rateLimit": "throttled"}}) is None
+    assert RateLimitSnapshot.from_graphql_payload({"data": "unavailable"}) is None
 
 
 def test_seconds_until_reset_never_negative():

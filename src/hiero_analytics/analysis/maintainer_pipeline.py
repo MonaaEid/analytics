@@ -2,13 +2,19 @@
 
 This module classifies contributor activity records, including both
 pull request and issue activity, into governance roles and builds
-aggregated pipeline tables for yearly, monthly, weekly, and
-repository-level views.
+aggregated pipeline tables.
+
+The time views are one rule at four resolutions — a person counts for a bucket
+if they were active anywhere in it — so the tabs zoom rather than disagree:
+all time by year, the last year by month, the last month by week, the last week
+by day. The repository view is the odd one out: it is a trailing activity
+window rather than a bucket, because "which repos are alive now" is a different
+question from "how has this moved".
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 
@@ -29,8 +35,9 @@ ACTIVE_WINDOW_DAYS = 183
 # Full history is still written to CSV; only the rendered charts are trimmed,
 # so the "By week"/"By month" views stay legible instead of becoming a wall of
 # hundreds of bars.
-RECENT_MONTHLY_BUCKETS = 24
-RECENT_WEEKLY_BUCKETS = 26
+RECENT_MONTHLY_BUCKETS = 12  # the "1 year" tab
+RECENT_WEEKLY_BUCKETS = 5  # the "1 month" tab
+RECENT_DAILY_BUCKETS = 7  # the "week" tab
 
 
 _MAINTAINER_ACTIVITY_TYPES = {
@@ -81,27 +88,6 @@ def activity_to_role_dataframe(
         to_row,
         ["repo", "actor", "occurred_at", "year", "stage"],
     )
-
-
-def _active_window_for_year(
-    year: int, today: datetime, window_days: int = ACTIVE_WINDOW_DAYS
-) -> tuple[datetime, datetime]:
-    """Return the (start, end) activity window for a given year.
-
-    Completed years use a fixed H2 window (Jul 1 – Dec 31) so historical
-    counts never change on refresh.  The current year uses a trailing
-    ``window_days``-day window ending today.
-    """
-    if year < today.year:
-        # Past year: fixed last-6-months window, immune to re-run date.
-        window_start = datetime(year, 7, 1, tzinfo=UTC)
-        window_end = datetime(year, 12, 31, 23, 59, 59, tzinfo=UTC)
-    else:
-        # Current year: trailing window from today.
-        window_end = today
-        window_start = today - timedelta(days=window_days)
-
-    return window_start, window_end
 
 
 def _counts_by_bucket(labelled: pd.DataFrame, bucket_col: str) -> pd.DataFrame:
@@ -165,64 +151,61 @@ def build_maintainer_weekly_pipeline(stage_df: pd.DataFrame) -> pd.DataFrame:
     return _counts_by_bucket(labelled, "week")
 
 
-def build_maintainer_yearly_pipeline(
-    stage_df: pd.DataFrame,
-    *,
-    active_window_days: int = ACTIVE_WINDOW_DAYS,
-    today: datetime | None = None,
-) -> pd.DataFrame:
-    """Build yearly counts of distinct active people by their highest governance role.
+def build_maintainer_daily_pipeline(stage_df: pd.DataFrame) -> pd.DataFrame:
+    """Build daily counts of distinct active people by their highest governance role.
 
-    Only counts contributors active in the last 6 months of each year (past years use
-    a fixed H2 window, stable across refreshes; the current year uses a full trailing
-    ``active_window_days``-day window from today, which early in the year reaches into
-    the previous December — those events count toward the current bar). Each person is
-    counted once per year, under the highest role they held in any repo, so the bands
-    are mutually exclusive and a year's total is the number of distinct active people.
+    The finest bucket the tab row offers: the last week, one bar per day. Counts
+    are strictly per-day, and today's bar reflects activity so far today.
+    """
+    if stage_df.empty:
+        return pd.DataFrame(columns=["day", *STAGE_COLUMNS])
+
+    labelled = stage_df.assign(_bucket=stage_df["occurred_at"].dt.strftime("%Y-%m-%d"))
+    return _counts_by_bucket(labelled, "day")
+
+
+def build_maintainer_yearly_pipeline(stage_df: pd.DataFrame) -> pd.DataFrame:
+    """Build calendar-year counts of distinct active people by their highest role.
+
+    Anyone active at any point in the year counts for that year — the same
+    whole-bucket rule the daily, weekly, and monthly builders use, so every tab
+    answers one question at a different resolution.
+
+    Each person is counted once per year, under the highest role they held in any
+    repo, so the stacked bands stay mutually exclusive and a year's total is the
+    number of distinct active people.
+
+    Past-year bars are stable across refreshes: a completed year's events cannot
+    change, and nothing here depends on the run date. Only the current year moves,
+    and only because the year is still in progress.
     """
     if stage_df.empty:
         return pd.DataFrame(columns=["year", *STAGE_COLUMNS])
 
-    today = today or datetime.now(UTC)
-    years = stage_df["year"].unique()
-
-    filtered_frames: list[pd.DataFrame] = []
-    for year in sorted(years):
-        window_start, window_end = _active_window_for_year(year, today, active_window_days)
-        mask = (stage_df["occurred_at"] >= window_start) & (stage_df["occurred_at"] <= window_end)
-        if year < today.year:
-            filtered_frames.append(stage_df.loc[mask & (stage_df["year"] == year)])
-        else:
-            # The current bar is a full trailing window, as the chart note states.
-            # Early in the year it reaches into last December; those events are
-            # relabelled so they count toward the current bar, not last year's.
-            filtered_frames.append(stage_df.loc[mask].assign(year=year))
-
-    active_df = pd.concat(filtered_frames, ignore_index=True) if filtered_frames else stage_df.iloc[0:0]
-
-    # One row per (year, actor) at their highest role — the shared bucket counter
-    # keeps the stacked bands mutually exclusive.
-    labelled = active_df.assign(_bucket=active_df["year"])
+    labelled = stage_df.assign(_bucket=stage_df["year"])
     return _counts_by_bucket(labelled, "year")
 
 
 def build_maintainer_repo_pipeline(
     stage_df: pd.DataFrame,
     *,
-    active_window_days: int = ACTIVE_WINDOW_DAYS,
+    active_window_days: int | None = ACTIVE_WINDOW_DAYS,
     today: datetime | None = None,
 ) -> pd.DataFrame:
     """Build repository-level active contributor counts per governance stage.
 
-    Only counts contributors active within the trailing ``active_window_days``
-    window ending today, so the chart reflects current engagement rather than
-    all-time history.
+    Counts contributors active within the trailing ``active_window_days``
+    window ending today; ``None`` means all recorded time, so the same builder
+    serves every span tab of the by-repository card.
     """
     if stage_df.empty:
         return pd.DataFrame(columns=["repo", *STAGE_COLUMNS])
 
-    cutoff = (today or datetime.now(UTC)) - timedelta(days=active_window_days)
-    active_df = stage_df[stage_df["occurred_at"] >= cutoff]
+    if active_window_days is None:
+        active_df = stage_df
+    else:
+        cutoff = (today or datetime.now(UTC)) - timedelta(days=active_window_days)
+        active_df = stage_df[stage_df["occurred_at"] >= cutoff]
 
     if active_df.empty:
         return pd.DataFrame(columns=["repo", *STAGE_COLUMNS])
@@ -241,30 +224,80 @@ def build_maintainer_repo_pipeline(
     return by_repo.astype({column: int for column in STAGE_COLUMNS})
 
 
-def recent_buckets(pipeline_df: pd.DataFrame, max_buckets: int, *, newest_first: bool = False) -> pd.DataFrame:
-    """Return the most recent ``max_buckets`` rows of a time-bucketed pipeline table.
+def last_calendar_buckets(now: datetime, count: int, freq: str) -> list[str]:
+    """The last ``count`` calendar bucket labels ending at ``now``'s bucket, oldest first.
 
-    Monthly/weekly bucket labels ('YYYY-MM', 'YYYY-Www') sort lexicographically in
-    chronological order, so the tail is the newest window. Used to keep the
-    fine-grained charts legible while the full history stays in the CSV.
+    ``freq`` is ``"day"`` ('YYYY-MM-DD'), ``"week"`` (ISO 'YYYY-Www'), or
+    ``"month"`` ('YYYY-MM') — the label formats the pipeline builders emit.
+    """
+    if freq == "day":
+        return [(now.date() - timedelta(days=i)).strftime("%Y-%m-%d") for i in reversed(range(count))]
+    if freq == "week":
+        monday = now.date() - timedelta(days=now.date().weekday())
+        weeks = [(monday - timedelta(weeks=i)).isocalendar() for i in reversed(range(count))]
+        return [f"{iso.year:04d}-W{iso.week:02d}" for iso in weeks]
+    if freq == "month":
+        year, month = now.year, now.month
+        labels = []
+        for _ in range(count):
+            labels.append(f"{year:04d}-{month:02d}")
+            year, month = (year - 1, 12) if month == 1 else (year, month - 1)
+        return list(reversed(labels))
+    raise ValueError(f"unknown bucket frequency: {freq!r}")
 
-    With ``newest_first=True`` the rows are returned in reverse-chronological order,
-    which places the latest bucket at the top of a horizontal bar chart. All rows
-    are kept when the table is already within the limit or ``max_buckets`` is not
-    positive.
+
+def calendar_recent_buckets(pipeline_df: pd.DataFrame, labels: list[str]) -> pd.DataFrame:
+    """The chart window as complete calendar buckets: exactly ``labels``, zero-filled.
+
+    Unlike taking the tail of the *populated* buckets, a span with no activity
+    stays in the window as a zero bar — so a chart labelled "1 month" covers
+    exactly the last month's calendar weeks and never stretches back to older
+    activity to fill its bar budget. Full history stays in the CSV; only the
+    rendered chart is windowed. An empty input stays empty so the plotting
+    layer's skip-empty behaviour is preserved.
     """
     if pipeline_df.empty:
         return pipeline_df.copy()
 
-    # Sort by the bucket-label column (always first) so ``tail`` is genuinely the
-    # newest window regardless of the caller's row order.
     bucket_col = pipeline_df.columns[0]
-    result = pipeline_df.sort_values(bucket_col)
+    count_cols = [column for column in pipeline_df.columns if column != bucket_col]
+    return (
+        pipeline_df.set_index(bucket_col)
+        .reindex(labels, fill_value=0)
+        .reset_index(names=bucket_col)
+        .astype({column: int for column in count_cols})
+    )
 
-    if max_buckets > 0 and len(result) > max_buckets:
-        result = result.tail(max_buckets)
 
-    if newest_first:
-        result = result.iloc[::-1]
+def humanize_month_label(bucket: str) -> str:
+    """``2026-07`` -> ``Jul 2026``. Chart display only; CSVs keep sortable keys."""
+    try:
+        return datetime.strptime(bucket, "%Y-%m").replace(tzinfo=UTC).strftime("%b %Y")
+    except ValueError:
+        return bucket
 
-    return result.reset_index(drop=True)
+
+def humanize_week_label(bucket: str) -> str:
+    """``2026-W32`` -> ``w/c 3 Aug 2026``, the week's Monday.
+
+    A date a human can place, unlike an ISO week number. Chart display only.
+    """
+    try:
+        year, week = bucket.split("-W")
+        monday = date.fromisocalendar(int(year), int(week), 1)
+    except (ValueError, AttributeError):
+        return bucket
+    return f"w/c {monday.day} {monday.strftime('%b %Y')}"
+
+
+def humanize_day_label(bucket: str) -> str:
+    """``2026-08-05`` -> ``Wed 5 Aug 2026``.
+
+    The weekday is what makes a weekend dip readable at a glance. Chart
+    display only.
+    """
+    try:
+        day = datetime.strptime(bucket, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        return bucket
+    return f"{day.strftime('%a')} {day.day} {day.strftime('%b %Y')}"

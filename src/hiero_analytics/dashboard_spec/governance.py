@@ -1,19 +1,32 @@
-"""Governance — authority, coverage, and concentration.
+"""Governance — authority, coverage, teams, and concentration.
 
 The risk-focused family: who holds which role, where coverage is thin or
-quiet, how the maintainer pipeline is developing, and how concentrated
-authority is across employers. Pure data; see the package __init__ for
-assembly.
+quiet, how the maintainer pipeline is developing, what the governance bodies
+are doing, and how concentrated authority is across employers. One tab; the
+jump bar links each themed section group. Pure data; see the package
+__init__ for assembly.
 """
 
 from __future__ import annotations
 
+from hiero_analytics.dashboard_spec.constants import PROJECT_ISSUES_URL
 from hiero_analytics.dashboard_spec.glossary import GLOSSARY_NOTE, glossary_of
 
-# "Suggest a correction" target for the affiliations reference table — the analytics
-# repo's issues page. The affiliations map is the source of truth, so a correction is
-# either a one-line edit to data/affiliations.yaml (append '# manual') or a new issue here.
-AFFILIATION_ISSUE_URL = "https://github.com/hiero-hackers/analytics/issues"
+# "Suggest a correction" target for the affiliations reference table. That table
+# earns a contextual link because its data is hand-curated: a correction is either
+# a one-line edit to data/affiliations.yaml (append '# manual') or an issue. Tables
+# of computed counts get no such link — the footer's general report link covers
+# "this looks wrong" everywhere else.
+AFFILIATION_ISSUE_URL = PROJECT_ISSUES_URL
+
+# Shown when the selected org has no content for this tab (see the manifest's
+# macro_absent_notes): say *why*, so absence reads as a property of the data,
+# not a bug.
+ABSENT_NOTE = (
+    "Governance analytics are derived from the org's published governance config "
+    "(team → permission grants). This org doesn't publish one, so roles, coverage, "
+    "teams, and organisation diversity can't be inferred."
+)
 
 CHART_MACRO = {
     "name": "Governance",
@@ -21,21 +34,43 @@ CHART_MACRO = {
         "hiero-ledger": [
             {
                 "id": "maintainer-pipeline",
-                "title": "Maintainer pipeline",
+                "title": "Maintainer pipeline over time",
+                "group": "Maintainer pipeline",
                 "description": (
-                    "How the maintainer/committer pipeline has moved over time and across repos — "
-                    "is the bench of future maintainers developing?"
+                    "How the maintainer/committer pipeline has moved over time — is the bench of "
+                    "future maintainers developing? The same spans, per repository, are the next card."
                 ),
-                # One chart, four views: a tab switcher (By year / month / week / repo)
-                # shows a single chart at a time instead of stacking all four.
                 "files": [
                     (
                         "Unique active contributors by role",
                         [
-                            ("By year", "maintainer_pipeline_yearly.png"),
-                            ("By month", "maintainer_pipeline_monthly.png"),
-                            ("By week", "maintainer_pipeline_weekly.png"),
-                            ("By repo", "maintainer_pipeline_by_repo.png"),
+                            # One rule at four resolutions, widest first.
+                            # See analysis/maintainer_pipeline.py.
+                            ("All time", "maintainer_pipeline_yearly.png"),
+                            ("1 year", "maintainer_pipeline_monthly.png"),
+                            ("1 month", "maintainer_pipeline_weekly.png"),
+                            ("Week", "maintainer_pipeline_daily.png"),
+                        ],
+                    ),
+                ],
+            },
+            {
+                "id": "maintainer-pipeline-by-repo",
+                "title": "Maintainer pipeline by repository",
+                "group": "Maintainer pipeline",
+                "description": (
+                    "The same role split, cut by repository instead of time: who is active in each "
+                    "repo over the selected span. Spans match the over-time card, so the two cards "
+                    "answer 'when' and 'where' with one vocabulary."
+                ),
+                "files": [
+                    (
+                        "Active contributors by role and repository",
+                        [
+                            ("All time", "maintainer_pipeline_by_repo.png"),
+                            ("1 year", "maintainer_pipeline_by_repo_365d.png"),
+                            ("1 month", "maintainer_pipeline_by_repo_30d.png"),
+                            ("Week", "maintainer_pipeline_by_repo_7d.png"),
                         ],
                     ),
                 ],
@@ -43,6 +78,7 @@ CHART_MACRO = {
             {
                 "id": "role-networks",
                 "title": "Role networks",
+                "group": "Roles",
                 "slideshow": True,
                 "description": (
                     "Repositories linked by the people who hold each governance role — one slide per "
@@ -61,6 +97,10 @@ CHART_MACRO = {
             {
                 "id": "org-diversity",
                 "title": "Organisation diversity",
+                # Renders inside the Organisation-diversity section, directly
+                # above its companion tables — the jump bar lands on charts +
+                # tables together.
+                "group": "Organisation diversity",
                 "description": (
                     "Where maintainer authority sits — org-wide, per team and per repo. The first chart is "
                     "the ecosystem-wide split of maintainers by employer (solo contributors pooled as "
@@ -69,46 +109,17 @@ CHART_MACRO = {
                     "down each repository's and each team's maintainer mix. See the affiliations and "
                     "repo-diversity tables below for the underlying detail."
                 ),
-                # Each chart offers an All / Active (last 90 days) tab so the roster
-                # and the day-to-day active core can be compared in place.
+                # Deliberately not time-filterable (charts and tables alike):
+                # diversity is a property of the roster, and windowing it mostly
+                # re-measures activity, which the activity views already show.
                 # The compact charts share the top rows; the two wide
                 # composition charts then stack full-width, one row each.
                 "files": [
-                    (
-                        "Maintainers by organisation",
-                        [
-                            ("All", "affiliation_donut.png"),
-                            ("Active 90d", "affiliation_donut_active.png"),
-                        ],
-                    ),
-                    (
-                        "Single-employer teams by org",
-                        [
-                            ("All", "single_employer_teams_by_org.png"),
-                            ("Active 90d", "single_employer_teams_by_org_active.png"),
-                        ],
-                    ),
-                    (
-                        "Single-employer repos by org",
-                        [
-                            ("All", "single_employer_repos_by_org.png"),
-                            ("Active 90d", "single_employer_repos_by_org_active.png"),
-                        ],
-                    ),
-                    (
-                        "Organisation mix by repo",
-                        [
-                            ("All", "repo_affiliation_composition.png"),
-                            ("Active 90d", "repo_affiliation_composition_active.png"),
-                        ],
-                    ),
-                    (
-                        "Organisation mix by team",
-                        [
-                            ("All", "team_affiliation_composition.png"),
-                            ("Active 90d", "team_affiliation_composition_active.png"),
-                        ],
-                    ),
+                    ("Maintainers by organisation", "affiliation_donut.png"),
+                    ("Single-employer teams by org", "single_employer_teams_by_org.png"),
+                    ("Single-employer repos by org", "single_employer_repos_by_org.png"),
+                    ("Organisation mix by repo", "repo_affiliation_composition.png"),
+                    ("Organisation mix by team", "team_affiliation_composition.png"),
                 ],
             },
         ],
@@ -131,15 +142,15 @@ SECTION_SPECS = [
         ),
         "columns": [
             ("repo", "repo"),
-            ("maintainers", "maintainers"),
-            ("committers", "committers"),
-            ("triage", "triage"),
-            ("active_recent", "active"),
-            ("maintainer_actions_recent", "maint. actions"),
-            ("committer_actions_recent", "comm. actions"),
-            ("triage_actions_recent", "triage actions"),
-            ("actions_recent", "actions"),
-            ("last_active", "last active"),
+            ("maintainers", "maintainers", "number"),
+            ("committers", "committers", "number"),
+            ("triage", "triage", "number"),
+            ("active_recent", "active", "number"),
+            ("maintainer_actions_recent", "maint. actions", "number"),
+            ("committer_actions_recent", "comm. actions", "number"),
+            ("triage_actions_recent", "triage actions", "number"),
+            ("actions_recent", "actions", "number"),
+            ("last_active", "last active", "date"),
         ],
     },
     {
@@ -154,10 +165,10 @@ SECTION_SPECS = [
         ),
         "columns": [
             ("repo", "repo"),
-            ("maintainers", "maintainers"),
-            ("active_maintainers", "active maintainers"),
-            ("committers", "committers"),
-            ("triage", "triage"),
+            ("maintainers", "maintainers", "number"),
+            ("active_maintainers", "active maintainers", "number"),
+            ("committers", "committers", "number"),
+            ("triage", "triage", "number"),
         ],
     },
     {
@@ -167,19 +178,37 @@ SECTION_SPECS = [
         "title": "Who carries the review load",
         "description": (
             "For each repo, the share of review+merge work in the selected period done by the single busiest "
-            "person who can merge — committer or maintainer. 'mergers' is how many reviewed/merged; "
-            "'top role' is whether the busiest is a committer or maintainer; 'top %' is their share, "
-            "'top-2 %' the top two combined. Highest concentration first; repos with under 20 recent "
-            "review+merge actions are omitted."
+            "person who can merge — committer or maintainer. 'top role' is whether the busiest is a "
+            "committer or maintainer; 'top %' is their share, 'top-2 %' the top two combined. Highest "
+            "concentration first; repos with under 20 recent review+merge actions are omitted."
         ),
         "columns": [
             ("repo", "repo"),
-            ("mergers", "mergers"),
-            ("load_recent", "review+merge"),
             ("top_carrier", "top carrier"),
             ("top_role", "top role"),
-            ("top_pct", "top %"),
-            ("top2_pct", "top-2 %"),
+            ("top_pct", "top %", "number"),
+            ("top2_pct", "top-2 %", "number"),
+        ],
+    },
+    {
+        "id": "gonedark",
+        "file": "role_coverage_globally_quiet.csv",
+        "periods": True,
+        "title": "Permission-holders with no recent activity",
+        "description": (
+            "Permission-holders with no recorded activity in any repo within the selected "
+            "period; 'All time' lists those with no recorded activity at all. Useful for "
+            "keeping access lists current. A blank 'days since active' means no recorded "
+            "activity yet. The 'quiet permission-holders' KPI tile above stays at a fixed "
+            "180-day threshold regardless of the tab."
+        ),
+        "columns": [
+            ("user", "user"),
+            ("highest_role", "highest role"),
+            ("roles", "roles held"),
+            ("repos_held", "repos", "number"),
+            ("days_since_active", "days since active", "number"),
+            ("last_active", "last active", "date"),
         ],
     },
     {
@@ -197,115 +226,12 @@ SECTION_SPECS = [
             ("user", "user"),
             ("granted_role", "role"),
             ("status", "status"),
-            ("days_since_active", "days since active"),
-            ("prs_recent", "PRs"),
-            ("reviews_recent", "reviews"),
-            ("merges_recent", "merges"),
-            ("issues_recent", "issues"),
-            ("labels_recent", "labels"),
-        ],
-    },
-    {
-        "id": "affiliations",
-        "file": "maintainer_affiliations.csv",
-        "title": "Maintainer affiliations — reference",
-        "description": (
-            "Reference: each maintainer, the organisation they were mapped to, and how it was decided — "
-            "'automated' (the resolver placed them from public signals) or 'manual' (a hand-correction). "
-            "Status is 'affiliated' (named employer), 'independent' (solo / personal-email only), or "
-            "'unknown' (no public signal). To fix a mapping or resolve an unknown, edit its row in "
-            "data/affiliations.yaml and append '# manual: reason' (it then survives regeneration and reads "
-            "'manual' here), or use 'Suggest a correction' to open an issue on the analytics repo."
-        ),
-        "action_url": AFFILIATION_ISSUE_URL,
-        "action_label": "Suggest a correction",
-        "columns": [
-            ("login", "maintainer"),
-            ("organisation", "organisation"),
-            ("status", "status"),
-            ("method", "method"),
-        ],
-    },
-    {
-        "id": "repodiversity",
-        "file": "repo_affiliation_diversity.csv",
-        "title": "Maintainer organisation diversity by repo",
-        "description": (
-            "Per repo: how many maintainers it has, how many distinct employers they span, the largest "
-            "employer and its share of resolved (mapped) maintainers — the same definition as the team "
-            "table — and the independent / unknown counts. Repos where one employer holds every maintainer "
-            "seat ('distinct orgs' = 1) are an organisational bus-factor. Single-employer repos first."
-        ),
-        "columns": [
-            ("repo", "repo"),
-            ("maintainers", "maintainers"),
-            ("distinct_orgs", "distinct orgs"),
-            ("top_org", "largest org"),
-            ("top_org_pct", "largest org %"),
-            ("independent", "independent"),
-            ("unknown", "unknown"),
-            ("organisations", "organisations"),
-        ],
-    },
-    {
-        "id": "teamdiversity",
-        "file": "team_affiliation_diversity.csv",
-        "title": "Team organisation concentration",
-        "description": (
-            "Per governance team: how many members resolve to an employer, how many distinct employers "
-            "they span, the largest employer and its share, and the concentration (HHI, 10000 = one "
-            "employer). 'single employer' = one employer holds every resolved seat — a capture / "
-            "bus-factor risk, most serious for admin, release, security, and maintainer teams; teams with "
-            "more unmapped than resolved members are never flagged. 'unknown' "
-            "is how many members aren't in the affiliations map (mostly non-maintainers), so read a flag "
-            "on a mostly-unknown team with caution. Most concentrated first."
-        ),
-        "columns": [
-            ("team", "team"),
-            ("members", "members"),
-            ("resolved", "resolved"),
-            ("distinct_orgs", "distinct orgs"),
-            ("top_org", "largest org"),
-            ("top_org_pct", "largest org %"),
-            ("hhi", "HHI"),
-            ("unknown", "unknown"),
-            ("single_employer", "single employer"),
-            ("organisations", "organisation mix"),
-        ],
-    },
-    {
-        "id": "gonedark",
-        "file": "role_coverage_globally_quiet.csv",
-        "title": "Permission-holders with no recent activity (180+ days)",
-        "description": (
-            "Permission-holders with no recorded activity in any repo in the last 180 days. "
-            "Useful for keeping access lists current. A blank 'days since active' means no "
-            "recorded activity yet."
-        ),
-        "columns": [
-            ("user", "user"),
-            ("highest_role", "highest role"),
-            ("roles", "roles held"),
-            ("repos_held", "repos"),
-            ("days_since_active", "days since active"),
-            ("last_active", "last active"),
-        ],
-    },
-    {
-        "id": "tscrepo",
-        "file": "tsc_activity_by_repo.csv",
-        "title": "TSC activity by repo (all-time)",
-        "description": "For TSC members with activity, which repos they work in and the role they hold there.",
-        "columns": [
-            ("account", "member"),
-            ("repo", "repo"),
-            ("repo_role", "role here"),
-            ("prs_opened", "PRs"),
-            ("reviews_given", "reviews"),
-            ("merges_done", "merges"),
-            ("issues_opened", "issues"),
-            ("labels_applied", "labels"),
-            ("last_active", "last active"),
+            ("days_since_active", "days since active", "number"),
+            ("prs_recent", "PRs", "number"),
+            ("reviews_recent", "reviews", "number"),
+            ("merges_recent", "merges", "number"),
+            ("issues_recent", "issues", "number"),
+            ("labels_recent", "labels", "number"),
         ],
     },
     {
@@ -333,7 +259,8 @@ SECTION_SPECS = [
     {
         "id": "teamrepo",
         "file": "team_activity_by_repo.csv",
-        "title": "Team activity by repo (all-time)",
+        "periods": True,
+        "title": "Team activity by repo",
         "description": (
             "Which repos each team is active in — type a team or repo to filter. This is a team-wide "
             "rollup (headcount + totals per repo); for a named maintainer's own by-repo activity, see the "
@@ -351,15 +278,100 @@ SECTION_SPECS = [
             ("last_active", "last active"),
         ],
     },
+    {
+        "id": "tscrepo",
+        "file": "tsc_activity_by_repo.csv",
+        "periods": True,
+        "title": "TSC activity by repo",
+        "description": "For TSC members with activity, which repos they work in and the role they hold there.",
+        "columns": [
+            ("account", "member"),
+            ("repo", "repo"),
+            ("repo_role", "role here"),
+            ("prs_opened", "PRs"),
+            ("reviews_given", "reviews"),
+            ("merges_done", "merges"),
+            ("issues_opened", "issues"),
+            ("labels_applied", "labels"),
+            ("last_active", "last active"),
+        ],
+    },
+    {
+        "id": "affiliations",
+        "file": "maintainer_affiliations.csv",
+        "title": "Maintainer affiliations — reference",
+        "description": (
+            "Reference: each maintainer, the organisation they were mapped to, and how it was decided — "
+            "'automated' (the resolver placed them from public signals) or 'manual' (a hand-correction). "
+            "Status is 'affiliated' (named employer), 'independent' (solo / personal-email only), or "
+            "'unknown' (no public signal). To fix a mapping or resolve an unknown, edit its row in "
+            "data/affiliations.yaml and append '# manual: reason' (it then survives regeneration and reads "
+            "'manual' here), or use 'Suggest a correction' to open an issue on the analytics repo."
+        ),
+        "action_url": AFFILIATION_ISSUE_URL,
+        "action_label": "Suggest a correction",
+        "columns": [
+            ("login", "maintainer"),
+            ("organisation", "organisation"),
+            ("status", "status"),
+            ("method", "method"),
+        ],
+    },
+    {
+        "id": "repodiversity",
+        "file": "repo_affiliation_diversity.csv",
+        # Deliberately not time-filterable (like the diversity charts):
+        # diversity is a property of the roster, not of a window's activity.
+        "title": "Maintainer organisation diversity by repo",
+        "description": (
+            "Per repo: how many maintainers it has, how many distinct employers they span, the largest "
+            "employer and its share of resolved (mapped) maintainers — the same definition as the team "
+            "table — and the independent / unknown counts. Repos where one employer holds every maintainer "
+            "seat ('distinct orgs' = 1) are an organisational bus-factor. Single-employer repos first."
+        ),
+        "columns": [
+            ("repo", "repo"),
+            ("maintainers", "maintainers", "number"),
+            ("distinct_orgs", "distinct orgs", "number"),
+            ("top_org", "largest org"),
+            ("top_org_pct", "largest org %", "number"),
+            ("independent", "independent"),
+            ("unknown", "unknown"),
+            ("organisations", "organisations"),
+        ],
+    },
+    {
+        "id": "teamdiversity",
+        "file": "team_affiliation_diversity.csv",
+        # Deliberately not time-filterable — see repodiversity above.
+        "title": "Team organisation concentration",
+        "description": (
+            "Per governance team: how many members resolve to an employer, how many distinct employers "
+            "they span, the largest employer and its share, and the concentration (HHI, 10000 = one "
+            "employer). 'single employer' = one employer holds every resolved seat — a capture / "
+            "bus-factor risk, most serious for admin, release, security, and maintainer teams; teams with "
+            "more unmapped than resolved members are never flagged. 'unknown' "
+            "is how many members aren't in the affiliations map (mostly non-maintainers), so read a flag "
+            "on a mostly-unknown team with caution. Most concentrated first."
+        ),
+        "columns": [
+            ("team", "team"),
+            ("members", "members"),
+            ("resolved", "resolved"),
+            ("distinct_orgs", "distinct orgs"),
+            ("top_org", "largest org"),
+            ("top_org_pct", "largest org %"),
+            ("hhi", "HHI"),
+            ("unknown", "unknown"),
+            ("single_employer", "single employer"),
+            ("organisations", "organisation mix"),
+        ],
+    },
 ]
 
 
-# Tables grouped by purpose so viewers get a short, scannable menu instead of one
-# long stack. Each group renders under its own heading (with a jump-bar link), and
-# within a group the order goes high-level aggregate → most granular. Groups render
-# after the charts. Order here is the on-screen order.
-# This tab's "how to read this": role and activity columns, plus the
-# affiliation and organisation-diversity vocabulary its reference tables use.
+# This tab's "how to read this": role and activity columns, plus the team,
+# affiliation, and organisation-diversity vocabulary its sections use.
 GLOSSARY = glossary_of(
     (
         "contributor / account / member / user",
@@ -369,8 +381,6 @@ GLOSSARY = glossary_of(
         "issues",
         "labels",
         "actions",
-        "review+merge",
-        "mergers",
         "top carrier / top % / top role",
         "role / role here",
         "highest role",
@@ -399,14 +409,23 @@ GLOSSARY = glossary_of(
     note=GLOSSARY_NOTE,
 )
 
+# Everything grouped by purpose so viewers get a short, scannable menu instead
+# of one long stack. Each group renders under its own heading (with a jump-bar
+# link); chart cards join the group they name via their "group" key, and a
+# group with no table ids is chart-only. Within a group the order goes
+# high-level aggregate → most granular. Order here is the on-screen order.
 SECTION_GROUPS = [
+    # The bench of future maintainers, over time and by repo (chart-only).
+    ("Maintainer pipeline", []),
     # The actionable headlines — where coverage is thin or work is concentrated.
     ("Coverage & risk", ["repoactivity", "understaffed", "loadshare", "gonedark"]),
-    # Who is affiliated with which organisation, and how concentrated that is — the
-    # table companions to the Organisation-diversity charts.
+    # Who holds which role: the role networks, then per repo.
+    ("Roles", ["repo"]),
+    # The governance bodies: teams as groups, then the TSC members individually.
+    ("Teams & TSC", ["teams", "teamrepo", "tscrepo"]),
+    # Who is affiliated with which organisation, and how concentrated that is —
+    # the org-diversity chart card renders at the top of this group.
     ("Organisation diversity", ["affiliations", "repodiversity", "teamdiversity"]),
-    # Reference: who holds which role, per repo and per team.
-    ("Roles & teams", ["repo", "tscrepo", "teams", "teamrepo"]),
 ]
 SECTION_ORDER = [sid for _name, ids in SECTION_GROUPS for sid in ids]
 SECTION_GROUP_OF = {sid: name for name, ids in SECTION_GROUPS for sid in ids}
@@ -415,30 +434,34 @@ SECTION_GROUP_OF = {sid: name for name, ids in SECTION_GROUPS for sid in ids}
 # horizontally at a readable height instead of squashing them to the card width.
 WIDE_CHARTS = {
     "repo_affiliation_composition.png",
-    "repo_affiliation_composition_active.png",
     "team_affiliation_composition.png",
-    "team_affiliation_composition_active.png",
 }
 
 # "How to read this" notes, keyed by chart filename. These describe how to read the
 # chart (its encoding and window) — never the current data values — so they stay
 # accurate across every refresh. A chart with no entry here simply shows no note.
 CHART_NOTES = {
-    "maintainer_pipeline_yearly.png": "Each bar is a calendar year, counting people active in its last six months (a fixed Jul–Dec "
-    "window for past years, so old bars stay put; a trailing six-month window for the current year). "
-    "Each person is counted once, under the highest governance role they hold in any repo "
-    "(general → triage → committer → maintainer), so the bar's total is the distinct people active.",
+    "maintainer_pipeline_yearly.png": "The widest view: one bar per calendar year, all the way back, counting everyone active at "
+    "any point in that year. Each person is counted once, under the highest governance role they hold "
+    "in any repo (general → triage → committer → maintainer), so a bar's total is the distinct people "
+    "active. The narrower tabs beside it apply the same rule to shorter spans — this one is the whole "
+    "history. Past bars never move; the current year is partial by definition.",
+    "maintainer_pipeline_daily.png": "The narrowest view: the last seven days, one bar per day, same counting rule as the wider "
+    "tabs. Useful for spotting whether a quiet week is quiet everywhere or just in one role; too "
+    "short to read a trend from, which is what the 1 month and 1 year views are for. Today's bar "
+    "covers activity so far today.",
     "maintainer_pipeline_monthly.png": "Each bar is a calendar month, counting the distinct people active that month — once each, under "
     "the highest governance role they hold in any repo (general → triage → committer → maintainer). "
     "Counts are strictly per-month (not a trailing window), so the current month is month-to-date. "
-    "Only the most recent 24 months are charted; full history stays in the CSV.",
+    "Only the most recent 12 months are charted — the '1 year' span; full history stays in the CSV.",
     "maintainer_pipeline_weekly.png": "Each bar is an ISO week (Mon–Sun), counting the distinct people active that week — once each, "
     "under the highest governance role they hold in any repo (general → triage → committer → "
     "maintainer). Counts are strictly per-week (not a trailing window), so the current week is "
-    "week-to-date. Only the most recent 26 weeks are charted; full history stays in the CSV.",
-    "maintainer_pipeline_by_repo.png": "Each bar is a repository, counting people active there in the last six months, grouped by the "
-    "governance role they hold in that repo (general → triage → committer → maintainer). A person "
-    "active in several repos is counted in each; smaller repos are pooled into 'Other Repos'.",
+    "week-to-date. Only the most recent 5 weeks are charted — the '1 month' span; full history stays in the CSV.",
+    "maintainer_pipeline_by_repo.png": "Each bar is a repository, counting people active there over the selected span (the tabs match "
+    "the over-time card: all time, 1 year, 1 month, week), grouped by the governance role they hold "
+    "in that repo (general → triage → committer → maintainer). A person active in several repos is "
+    "counted in each; smaller repos are pooled into 'Other Repos'.",
     "maintainer_network.png": "Each bubble is a repository, sized by how many maintainers are active in it; two repos are "
     "linked when they share a maintainer (thicker line = more shared). Bubble colour is the repo's "
     "category.",
@@ -450,8 +473,7 @@ CHART_NOTES = {
     "repo's category.",
     "affiliation_donut.png": "The share of maintainers held by the two largest employers, with everyone else (smaller orgs and "
     "solo 'Independent' contributors) pooled into 'Other' — the concentration at a glance; the full "
-    "breakdown is in the affiliations table. Switch to the Active tab to count only maintainers active "
-    "in the last 90 days.",
+    "breakdown is in the affiliations table.",
     "repo_affiliation_composition.png": "Each bar is a repository, normalised to 100% so the segments show each employer's share of that "
     "repo's maintainers. The dashed line marks 50%: a segment reaching past it means one employer holds "
     "the majority (an organisational bus-factor). Largest employers get their own colour, smaller ones "
@@ -471,7 +493,7 @@ CHART_NOTES = {
     "single_employer_repos_by_org.png": "Each bar is an organisation; bar height is how many repositories it solely maintains — every "
     "resolved maintainer of that repo shares this one employer (at least two of them, no independents). "
     "Taller bars mean more single-employer repos, an organisational bus-factor. Repos dominated by "
-    "unmapped maintainers are not counted here. The Active tab restricts to maintainers active in the last 90 days.",
+    "unmapped maintainers are not counted here.",
 }
 
 # Step-by-step "how this was built" methodology, keyed by chart filename. Shown as
@@ -492,6 +514,23 @@ CHART_METHODOLOGY = {
             "Stack the tiers to show whether the bench below maintainers is developing; the by-repo "
             "variant does the same across repositories instead of time."
         ),
+        (
+            "Membership in a bucket is whole-bucket: one tracked event anywhere in the year (or month, "
+            "or week) counts. No recency window is applied here — that is what separates this view "
+            "from the 'active at year end' variant, and from the per-repo activity tables, which use "
+            "their own recent-activity window."
+        ),
+    ],
+    "maintainer_pipeline_by_repo.png": [
+        (
+            "Take the same role-attached activity events as the over-time card, filtered to the "
+            "selected span: everything, the last year, the last month, or the last week."
+        ),
+        (
+            "Count distinct people per repository at the highest role they hold in that repo — a "
+            "person active in several repos counts in each, so bars overlap deliberately."
+        ),
+        "Pool repositories below the display threshold into 'Other Repos' so the chart stays readable.",
     ],
     "maintainer_network.png": [
         (

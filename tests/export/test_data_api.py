@@ -213,6 +213,36 @@ def test_period_variants_ride_along(api_env: Path, tmp_path: Path, monkeypatch: 
     assert document["periods"][period.key] == [{"name": "a"}]
 
 
+def test_all_time_is_never_a_period_variant(api_env: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The all-time window never rides along: ``rows`` already is that table.
+
+    Emitting it duplicated every row in the payload and gave the dashboard two
+    identical "All time" tabs. The period vocabulary now excludes it by
+    construction; this pins both the exclusion and that an ``_all.csv`` left on
+    disk by an older pipeline is ignored rather than shipped.
+    """
+    section = {
+        "id": "widgets",
+        "file": "widgets.csv",
+        "title": "Widgets",
+        "description": "All widgets.",
+        "columns": [("name", "widget")],
+        "periods": True,
+    }
+    monkeypatch.setattr(data_api, "TABLE_FAMILIES", {"Testing": _family(section)})
+    _write_widgets(api_env, pd.DataFrame({"name": ["a", "b"]}))
+    # A stale all-time variant from before the vocabulary change.
+    pd.DataFrame({"name": ["a", "b"]}).to_csv(api_env / "widgets_all.csv", index=False)
+
+    emit_data_api()
+
+    document = json.loads((tmp_path / "data" / "api" / API_VERSION / ORG / "widgets.json").read_text())
+    assert "all" not in document.get("periods", {})
+    manifest = json.loads((tmp_path / "data" / "api" / API_VERSION / "manifest.json").read_text())
+    assert "all" not in manifest["period_labels"]
+    assert "All time" not in manifest["period_labels"].values()
+
+
 def test_chart_sections_carry_presentation_structure(api_env: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Chart sections keep their card structure: variants, notes, wide, slideshow."""
     monkeypatch.setattr(
@@ -286,7 +316,7 @@ def test_manifest_ships_macro_glossaries_and_period_labels(api_env: Path, monkey
     manifest = json.loads(emit_data_api().read_text())
 
     assert manifest["macro_glossaries"] == {"Testing": hip_glossary}
-    assert manifest["period_labels"]["30d"] == "30 days"
+    assert manifest["period_labels"]["30d"] == "1 month"
 
 
 def test_chart_companion_csv_is_copied_and_referenced(api_env: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -367,3 +397,18 @@ def test_views_are_emitted_as_documents_with_manifest_refs(
     assert matrix["rows"][0]["cells"][0]["merged"] == 2
     assert matrix["generated_at"] == "2026-07-25T09:00:00+00:00"
     assert len(matrix["ramp"]) == 5
+
+
+def test_manifest_carries_the_wip_flag_and_issues_url(api_env: Path, tmp_path: Path):
+    """The WIP banner and the report link are data-side policy (#322).
+
+    ``wip`` ships true today; retiring the banner is then a one-line flip here
+    rather than a frontend change. The frontend treats an *absent* flag as
+    show-the-banner, so an older cached manifest fails toward warning too long.
+    """
+    _write_widgets(api_env, pd.DataFrame({"name": ["a"], "count": [3], "last_seen": ["2026-07-01"]}))
+
+    manifest = json.loads(emit_data_api().read_text())
+
+    assert manifest["wip"] is True
+    assert manifest["issues_url"].startswith("https://github.com/")

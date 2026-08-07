@@ -45,8 +45,12 @@ from hiero_analytics.dashboard_spec import (
     CHART_METHODOLOGY,
     CHART_NOTES,
     CUSTOM_VIEW_MODULES,
+    MACRO_ABSENT_NOTES,
     MACRO_GLOSSARIES,
+    MACRO_GROUP_ORDER,
+    MACRO_PARENTS,
     METRIC_ANNOTATIONS,
+    PROJECT_ISSUES_URL,
     TABLE_FAMILIES,
     WIDE_CHARTS,
 )
@@ -58,6 +62,13 @@ from hiero_analytics.provenance import resolve_provenance
 logger = logging.getLogger(__name__)
 
 API_VERSION = "v1"
+
+# The rolling windows the API publishes as period variants. The all-time period
+# is deliberately excluded: a document's own ``rows`` already are the all-time
+# table, so emitting it again duplicated every such row in the payload and gave
+# the dashboard two identical "All time" tabs (the selector's own no-period
+# state, plus this variant).
+API_PERIODS = tuple(period for period in ACTIVITY_PERIODS if period.days is not None)
 
 # A section counts as stale when its data is older than the scheduled refresh
 # cadence plus slack for a slow run. The analytics refresh runs every 5 days,
@@ -141,7 +152,7 @@ def _period_variants(section: dict, org: str, org_data_dir: Path) -> dict[str, l
         return {}
     stem = Path(section["file"]).stem
     variants: dict[str, list[dict]] = {}
-    for period in ACTIVITY_PERIODS:
+    for period in API_PERIODS:
         path = org_data_dir / period.filename(stem)
         if path.exists():
             # Period files carry the same columns as their base table, so they
@@ -199,6 +210,25 @@ def _chart_variant(org: str, chart_dir: Path, label: str, filename: str) -> dict
     return variant
 
 
+# Aspect ratio beyond which a chart cannot survive a ~340px gallery cell: a
+# panoramic chart (many bars along x) gets illegibly narrow bars, so it earns
+# the full-row scroll treatment `wide` renders as. Derived from the actual PNG
+# rather than hand-set per chart, so a pipeline that changes a chart's shape
+# changes its layout with it; the spec's WIDE_CHARTS remains as the manual
+# override. (Tall charts are the frontend's call — it has the same dimensions
+# per variant and spans them without the scroll box.)
+_WIDE_ASPECT_ABOVE = 2.0
+
+
+def _needs_full_row(variants: list[dict]) -> bool:
+    """Whether any variant is panoramic enough to demand the full-row scroll."""
+    for variant in variants:
+        width, height = variant.get("width"), variant.get("height")
+        if width and height and width / height >= _WIDE_ASPECT_ABOVE:
+            return True
+    return False
+
+
 def _org_chart_sections(org: str, org_data_dir: Path, org_dir: Path) -> list[dict]:
     """The org's chart sections with their full presentation structure.
 
@@ -211,7 +241,10 @@ def _org_chart_sections(org: str, org_data_dir: Path, org_dir: Path) -> list[dic
     chart_dir = paths.ORG_CHARTS_DIR / org
     sections = []
     for macro in CHART_MACROS:
-        for spec in macro["charts"].get(org, []):
+        # "*" declares org-independent cards: they apply to any org, and the
+        # per-variant existence filter below drops whatever an org's pipelines
+        # didn't produce. An explicit org key overrides the wildcard.
+        for spec in macro["charts"].get(org) or macro["charts"].get("*", []):
             charts = []
             for caption, variant_specs in spec["files"]:
                 variants = [
@@ -227,8 +260,14 @@ def _org_chart_sections(org: str, org_data_dir: Path, org_dir: Path) -> list[dic
                     chart["note"] = note
                 if methodology := next((CHART_METHODOLOGY[f] for f in filenames if f in CHART_METHODOLOGY), None):
                     chart["methodology"] = methodology
+                # Two different treatments: hand-flagged WIDE_CHARTS have many
+                # bars and need the horizontal scroll box; a merely wide-aspect
+                # chart (few bars, long legend) just spans the full row, scaled
+                # to fit — a scroll box would crop its title and legend.
                 if any(f in WIDE_CHARTS for f in filenames):
                     chart["wide"] = True
+                elif _needs_full_row(variants):
+                    chart["full_row"] = True
                 charts.append(chart)
             if charts:
                 section = {
@@ -240,6 +279,11 @@ def _org_chart_sections(org: str, org_data_dir: Path, org_dir: Path) -> list[dic
                 }
                 if spec.get("slideshow"):
                     section["slideshow"] = True
+                # Every chart card belongs to a named section group — the tab
+                # renders as ordered groups (see the manifest's group_order),
+                # never a generic "Charts" block. A card without an explicit
+                # group is its own section, named by its title.
+                section["group"] = spec.get("group") or spec["title"]
                 _attach_download(section, spec, org, org_data_dir, org_dir)
                 sections.append(section)
     return sections
@@ -332,8 +376,25 @@ def emit_data_api() -> Path:
         # Each lists only what its own tab shows; the shared prose behind the
         # column definitions lives in dashboard_spec.glossary.
         "macro_glossaries": MACRO_GLOSSARIES,
+        # Sub-tab macros, macro name -> umbrella tab name. The frontend shows
+        # one top-level tab per umbrella with a second tab row for its members.
+        "macro_parents": MACRO_PARENTS,
+        # Why a tab may be empty for an org — shown in place of a blank tab.
+        "macro_absent_notes": MACRO_ABSENT_NOTES,
+        # Macro name -> ordered section-group names; the frontend renders each
+        # tab as this sequence of named sections (views + charts + tables).
+        "group_order": MACRO_GROUP_ORDER,
+        # Family display order. The frontend otherwise derives tab order from
+        # the sections lists, which puts a chart-only macro after every
+        # table-bearing one regardless of where its family sits.
+        "macro_order": [macro["name"] for macro in CHART_MACROS],
         # Display labels for the rolling activity periods ("30d" -> "30 days").
-        "period_labels": {period.key: period.label for period in ACTIVITY_PERIODS},
+        "period_labels": {period.key: period.label for period in API_PERIODS},
+        # Where the dashboard footer points "spotted something wrong?".
+        "issues_url": PROJECT_ISSUES_URL,
+        # The WIP banner is data-side policy like everything else the manifest
+        # carries: flip to False here to retire it, no frontend change needed.
+        "wip": True,
         "version": API_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "provenance": {

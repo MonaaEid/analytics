@@ -17,12 +17,12 @@ export const GOV_DOC: SectionDoc = {
   source: "roles.csv",
   columns: [
     { key: "user", label: "user" },
-    { key: "count", label: "count" },
+    { key: "count", label: "count", format: "number" },
     { key: "last_seen", label: "last seen", format: "date" },
   ],
   rows: [
     { user: "carol", count: 3, last_seen: "2026-07-01T00:00:00" },
-    { user: "alice", count: 10, last_seen: "2026-07-20T00:00:00" },
+    { user: "alice", count: 2490, last_seen: "2026-07-20T00:00:00" },
     { user: "bob", count: 7, last_seen: "2026-07-10T00:00:00" },
   ],
   row_count: 3,
@@ -187,7 +187,11 @@ export const MANIFEST: Manifest = {
       terms: [{ term: "What is measured.", definition: "Referencing PRs — *evidence*, never proof." }],
     },
   },
-  period_labels: { "30d": "30 days" },
+  period_labels: { "30d": "1 month" },
+  issues_url: "https://example.test/issues",
+  macro_absent_notes: {
+    Governance: "Governance analytics need a published governance config; this org doesn't have one.",
+  },
   provenance: { git_sha: "abc1234", data_as_of: "2026-07-25T21:00:00+00:00" },
   orgs: {
     "hiero-ledger": {
@@ -211,6 +215,7 @@ export const MANIFEST: Manifest = {
           id: "pipeline",
           macro: "Governance",
           title: "Maintainer pipeline",
+          group: "Pipeline charts",
           description: "How the pipeline moved.",
           charts: [
             {

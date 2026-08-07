@@ -18,9 +18,23 @@ from hiero_analytics.provenance import (
 )
 
 
-def _write_dataset(directory: Path, name: str, fetched_through: str | None, records: int = 2) -> Path:
-    """Write a dataset file shaped like ``dataset_store.save_dataset`` output."""
+def _write_dataset(
+    directory: Path,
+    name: str,
+    fetched_at: str | None,
+    records: int = 2,
+    *,
+    fetched_through: str | None = "2026-01-01T00:00:00+00:00",
+) -> Path:
+    """Write a dataset file shaped like ``dataset_store.save_dataset`` output.
+
+    ``fetched_at`` (wall clock at write) is what freshness reads; the content
+    watermark defaults to something old and irrelevant precisely so a test that
+    cares about freshness fails if the two are ever conflated again.
+    """
     payload: dict[str, object] = {"version": 2}
+    if fetched_at is not None:
+        payload["fetched_at"] = fetched_at
     if fetched_through is not None:
         payload["fetched_through"] = fetched_through
     payload["records"] = [{"id": index} for index in range(records)]
@@ -86,6 +100,68 @@ def test_an_unreadable_stamp_withdraws_the_claim_too(tmp_path):
     _write_dataset(tmp_path, "issues_org_all.json", "2026-07-23T09:00:00+00:00")
 
     assert dataset_watermark(tmp_path) is None
+
+
+def test_freshness_ignores_the_content_watermark(tmp_path):
+    """A stale ``fetched_through`` on a freshly-written dataset must not age the run.
+
+    The regression this pins: the HIP inventory watermarks itself from
+    frontmatter ``updated:`` dates, so a fortnight with no HIP edits reported
+    the whole dashboard as a fortnight stale even though the fetch had just run.
+    """
+    _write_dataset(
+        tmp_path,
+        "hip_inventory_org_all.json",
+        "2026-08-06T09:00:00+00:00",  # fetched minutes ago
+        fetched_through="2026-07-19T00:00:00+00:00",  # newest HIP edit, weeks old
+    )
+
+    assert dataset_watermark(tmp_path) == datetime(2026, 8, 6, 9, 0, tzinfo=UTC)
+
+
+def test_a_dataset_written_before_fetched_at_bounds_via_its_watermark(tmp_path):
+    """An old-format file contributes its content watermark, not nothing.
+
+    Skipping it would let the stamped datasets assert a freshness the run
+    cannot support while a chart still reads the unstamped file. The content
+    watermark can only understate the file's freshness, so the bound stays
+    honest — and the field is additive, so the fallback retires itself on the
+    next run that rewrites the file.
+    """
+    _write_dataset(tmp_path, "legacy_org_all.json", None, fetched_through="2026-01-01T00:00:00+00:00")
+    _write_dataset(tmp_path, "issues_org_all.json", "2026-08-06T09:00:00+00:00")
+
+    assert dataset_watermark(tmp_path) == datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+
+
+def test_a_damaged_fetched_at_still_withdraws_the_claim(tmp_path):
+    """Present-but-unparseable is damage, not the old format — no bound at all."""
+    _write_dataset(tmp_path, "bad.json", "the day before yesterday")
+    _write_dataset(tmp_path, "issues_org_all.json", "2026-08-06T09:00:00+00:00")
+
+    assert dataset_watermark(tmp_path) is None
+
+
+def test_the_real_writer_produces_a_readable_freshness_stamp(tmp_path):
+    """Guard the coupling: provenance parses what ``save_dataset`` actually writes.
+
+    Every other test here hand-builds the payload, so a change to the writer's
+    field set or key order would otherwise leave them all green while the real
+    stamp went unreadable.
+    """
+    from hiero_analytics.data_sources.dataset_store import save_dataset
+    from hiero_analytics.data_sources.models import ScorecardRecord
+
+    before = datetime.now(UTC)
+    save_dataset(
+        tmp_path / "written_org_all.json",
+        [ScorecardRecord(repo="r", score=8.0, checks={}, date=datetime(2026, 7, 19, tzinfo=UTC))],
+        fetched_through=datetime(2026, 7, 19, tzinfo=UTC),
+    )
+
+    stamp = dataset_watermark(tmp_path)
+    assert stamp is not None
+    assert before <= stamp <= datetime.now(UTC)
 
 
 def test_watermark_treats_a_naive_timestamp_as_utc(tmp_path):
@@ -337,3 +413,16 @@ def test_manifest_flags_a_damaged_dataset(tmp_path):
     # identify byte-for-byte later.
     assert all(len(entry["sha256"]) == 64 for entry in manifest["datasets"])
     assert manifest["data_as_of"] is None
+
+
+def test_the_legacy_dataset_notice_is_logged_once_per_run(tmp_path, caplog):
+    """Provenance resolves per figure, so a per-pass warning floods the log."""
+    provenance._warned_legacy_datasets.clear()
+    _write_dataset(tmp_path, "legacy_org_all.json", None, fetched_through="2026-01-01T00:00:00+00:00")
+    _write_dataset(tmp_path, "issues_org_all.json", "2026-08-06T09:00:00+00:00")
+
+    with caplog.at_level("WARNING"):
+        for _ in range(5):  # five charts in one run
+            dataset_watermark(tmp_path)
+
+    assert sum("predates the fetched_at stamp" in record.message for record in caplog.records) == 1

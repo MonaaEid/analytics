@@ -42,24 +42,55 @@ def test_run_pipelines_fail_fast_stops_after_first_failure():
     assert failures == ["a"]
 
 
-def test_run_extra_org_calls_runner_in_process_with_org(monkeypatch):
-    """Extra orgs run the contributor-activity runner in-process, passing the org explicitly."""
+def _fake_pipeline(name: str, runner, *, extra_orgs: bool = True, offline: bool = False):
+    """A minimal stand-in for a registry Pipeline entry."""
+
+    class _Fake:
+        pass
+
+    fake = _Fake()
+    fake.name = name
+    fake.extra_orgs = extra_orgs
+    fake.offline = offline
+    fake.resolve = lambda: runner
+    return fake
+
+
+def test_run_extra_org_runs_each_org_independent_pipeline(monkeypatch):
+    """Extra orgs run every extra_orgs-flagged pipeline in-process, passing the org explicitly."""
     seen = []
-    monkeypatch.setattr(run_all, "_resolve", lambda name: lambda org: seen.append((name, org)))
+    monkeypatch.setattr(
+        run_all,
+        "PIPELINES",
+        (
+            _fake_pipeline("difficulty", lambda org: seen.append(("difficulty", org))),
+            _fake_pipeline("role_coverage", lambda org: seen.append(("role_coverage", org)), extra_orgs=False),
+            _fake_pipeline("scorecard", lambda org: seen.append(("scorecard", org))),
+        ),
+    )
 
-    assert run_all._run_extra_org("other-org") is True
-    assert seen == [("contributor_activity", "other-org")]
+    assert run_all._run_extra_org("other-org") == []
+    assert seen == [("difficulty", "other-org"), ("scorecard", "other-org")]
 
 
-def test_run_extra_org_reports_failure(monkeypatch):
-    """A failing extra-org run returns False instead of raising."""
+def test_run_extra_org_isolates_failures_per_pipeline(monkeypatch):
+    """A failing extra-org pipeline is labelled name[org]; the rest still run."""
 
     def boom(org):
         raise RuntimeError("kaboom")
 
-    monkeypatch.setattr(run_all, "_resolve", lambda _name: boom)
+    seen = []
+    monkeypatch.setattr(
+        run_all,
+        "PIPELINES",
+        (
+            _fake_pipeline("difficulty", boom),
+            _fake_pipeline("scorecard", lambda org: seen.append(org)),
+        ),
+    )
 
-    assert run_all._run_extra_org("other-org") is False
+    assert run_all._run_extra_org("other-org") == ["difficulty[other-org]"]
+    assert seen == ["other-org"]
 
 
 def test_run_pipelines_empty_when_all_succeed():
@@ -163,7 +194,11 @@ def test_main_runs_extra_orgs_then_the_data_api_once(monkeypatch):
     monkeypatch.setattr(run_all, "EXTRA_ORGS", ["good-org", "bad-org"])
 
     attempted = []
-    monkeypatch.setattr(run_all, "_run_extra_org", lambda org: attempted.append(org) or org != "bad-org")
+    monkeypatch.setattr(
+        run_all,
+        "_run_extra_org",
+        lambda org: attempted.append(org) or ([] if org != "bad-org" else [f"difficulty[{org}]"]),
+    )
     renderer_runs = []
     monkeypatch.setattr(run_all, "_resolve", lambda name: lambda: renderer_runs.append(name))
 
@@ -172,3 +207,51 @@ def test_main_runs_extra_orgs_then_the_data_api_once(monkeypatch):
 
     assert attempted == ["good-org", "bad-org"]  # every extra org attempted
     assert renderer_runs == ["data_api"]
+
+
+def _prune_spy(monkeypatch) -> list[bool]:
+    """Record whether main() reached the dataset prune."""
+    calls: list[bool] = []
+    monkeypatch.setattr(run_all, "prune_untouched_datasets", lambda: calls.append(True))
+    monkeypatch.setattr(run_all, "setup_logging", lambda: None)
+    monkeypatch.setattr(run_all, "_resolve", lambda _name: lambda: None)
+    monkeypatch.setattr(run_all, "EXTRA_ORGS", [])
+    return calls
+
+
+def test_main_prunes_orphaned_datasets_after_a_clean_run(monkeypatch):
+    """A complete online run is the only place an unclaimed dataset means "orphan"."""
+    calls = _prune_spy(monkeypatch)
+    monkeypatch.setattr(run_all, "default_pipelines", lambda: [("ok", lambda: None)])
+    monkeypatch.setattr(run_all, "offline_mode_enabled", lambda: False)
+
+    run_all.main()
+
+    assert calls == [True]
+
+
+def test_main_does_not_prune_when_a_pipeline_failed(monkeypatch):
+    """A pipeline that failed may never have reached its fetch, so nothing is orphaned."""
+    calls = _prune_spy(monkeypatch)
+
+    def boom():
+        raise RuntimeError("fail")
+
+    monkeypatch.setattr(run_all, "default_pipelines", lambda: [("boom", boom)])
+    monkeypatch.setattr(run_all, "offline_mode_enabled", lambda: False)
+
+    with pytest.raises(SystemExit):
+        run_all.main()
+
+    assert calls == []
+
+
+def test_main_does_not_prune_offline(monkeypatch):
+    """Offline runs skip the network pipelines, so most datasets go unclaimed."""
+    calls = _prune_spy(monkeypatch)
+    monkeypatch.setattr(run_all, "default_pipelines", lambda: [("ok", lambda: None)])
+    monkeypatch.setattr(run_all, "offline_mode_enabled", lambda: True)
+
+    run_all.main()
+
+    assert calls == []

@@ -15,7 +15,6 @@ so this stays cheap and deterministic.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
 
 from hiero_analytics.analysis.affiliation import (
     INDEPENDENT,
@@ -30,20 +29,17 @@ from hiero_analytics.analysis.affiliation import (
     build_team_affiliation_diversity,
     build_team_org_composition,
     classify_maintainers,
-    filter_active_logins,
     load_affiliations,
     load_manual_logins,
     summarize_affiliation,
     top_n_with_other,
 )
-from hiero_analytics.analysis.contributor_activity_profile import latest_activity_by_account
 from hiero_analytics.analysis.contributor_heatmap import (
     build_activity_heatmap_dataframe,
     build_repo_activity_heatmap,
     build_team_activity_heatmap,
     grouped_heatmap_chart_data,
 )
-from hiero_analytics.config.analysis import ROLE_ACTIVE_DAYS
 from hiero_analytics.config.paths import ORG, ensure_org_dirs
 from hiero_analytics.data_sources.governance_config import (
     build_repo_role_lookup,
@@ -51,7 +47,7 @@ from hiero_analytics.data_sources.governance_config import (
     fetch_governance_config,
 )
 from hiero_analytics.export.save import plot_and_save, save_dataframe
-from hiero_analytics.pipelines._shared import load_contributor_activity, load_issue_label_events, shared_client
+from hiero_analytics.pipelines._shared import load_contributor_activity, shared_client
 from hiero_analytics.plotting.bars import plot_bar, plot_stacked_bar
 from hiero_analytics.plotting.heatmap import plot_heatmap
 from hiero_analytics.plotting.pie import plot_pie
@@ -214,48 +210,6 @@ def _single_employer_repo_chart(role_lookup, affiliations, charts_dir, *, suffix
     )
 
 
-def _write_active_diversity(
-    maintainers,
-    affiliations,
-    last_seen,
-    cutoff,
-    org_data_dir,
-    org_charts_dir,
-    *,
-    all_summary,
-    org,
-):
-    """Diversity over the active maintainer core; returns the active login set."""
-    active = filter_active_logins(maintainers, last_seen, cutoff)
-    classified = classify_maintainers(active, affiliations)
-    summary = summarize_affiliation(classified)
-    save_dataframe(classified, org_data_dir / "maintainer_affiliations_active.csv")
-    logger.info(
-        "Active maintainers (%dd): %d of %d on the roster; largest is %s at %d%% (roster %d%%); HHI %d (roster %d)",
-        ROLE_ACTIVE_DAYS,
-        summary["maintainers"],
-        all_summary["maintainers"],
-        summary["top_org"],
-        summary["top_share_pct"],
-        all_summary["top_share_pct"],
-        summary["hhi"],
-        all_summary["hhi"],
-    )
-    active_distribution = build_affiliation_distribution(classified)
-    save_dataframe(active_distribution, org_data_dir / "affiliation_distribution_active.csv")
-    _pie_chart(
-        active_distribution,
-        "organisation",
-        "maintainers",
-        "active maintainers",
-        f"{org} — active maintainer diversity (activity in the last {ROLE_ACTIVE_DAYS} days)",
-        org_charts_dir / "affiliation_donut_active.png",
-        top_n=2,
-        donut=False,
-    )
-    return active
-
-
 def _write_activity_heatmaps(records, role_lookup, team_membership, affiliations, org_data_dir, org_charts_dir, *, org):
     """Activity heatmaps at three aggregation levels — by organisation, team, and repository.
 
@@ -292,113 +246,30 @@ def _write_activity_heatmaps(records, role_lookup, team_membership, affiliations
     logger.info("Activity heatmaps: %d organisations, plus team and repository views", n_org)
 
 
-def _write_active_composition(
-    role_lookup,
-    team_membership,
-    affiliations,
-    active,
-    last_seen,
-    cutoff,
-    org_data_dir,
-    org_charts_dir,
-    *,
-    org,
-):
-    """Active variants of the composition charts (same code, active population).
-
-    Lets the dashboard toggle All vs Active. Repos use active maintainers; teams
-    use active members of any role.
-    """
-    active_role_lookup = {
-        repo: {u: r for u, r in holders.items() if r == "maintainer" and u in active}
-        for repo, holders in role_lookup.items()
-    }
-    all_members = {m for members in team_membership.values() for m in members}
-    active_members = filter_active_logins(all_members, last_seen, cutoff)
-    active_team_membership = {t: {m for m in members if m in active_members} for t, members in team_membership.items()}
-
-    _repo_composition_chart(
-        active_role_lookup,
-        affiliations,
-        org_data_dir,
-        org_charts_dir,
-        suffix="_active",
-        title=f"{org} — active maintainer organisation mix by repository (last {ROLE_ACTIVE_DAYS}d)",
-    )
-    _single_employer_chart(
-        active_team_membership,
-        affiliations,
-        org_charts_dir,
-        suffix="_active",
-        title=f"{org} — single-employer teams among active members, by organisation",
-    )
-    _single_employer_repo_chart(
-        active_role_lookup,
-        affiliations,
-        org_charts_dir,
-        suffix="_active",
-        title=f"{org} — single-employer repositories among active maintainers, by organisation",
-    )
-    _team_composition_chart(
-        active_team_membership,
-        affiliations,
-        org_data_dir,
-        org_charts_dir,
-        suffix="_active",
-        title=f"{org} — active organisation mix by governance team (last {ROLE_ACTIVE_DAYS}d)",
-    )
-
-
 def _write_activity_views(
-    maintainers,
     role_lookup,
     team_membership,
     affiliations,
     org_data_dir,
     org_charts_dir,
     *,
-    all_summary,
     org: str = ORG,
 ):
-    """Activity-driven views: active-maintainer diversity + the per-org activity heatmap.
+    """Activity-driven views: the per-org/team/repo activity heatmaps.
 
-    The roster includes people who've gone quiet; the active view measures who
-    actually holds the keys day-to-day (usually more concentrated), and the heatmap
-    shows each employer's weighted activity month by month. Loads the (cached) org
-    activity dataset once; skips quietly if no activity data is available.
+    Nothing else here is windowed: the diversity tables and charts are
+    deliberately not time-filterable (diversity is a roster property, and
+    windowing it mostly re-measures activity, which the activity views already
+    show). Loads the (cached) org activity dataset once; skips quietly if no
+    activity data is available.
     """
     client = shared_client()
     records = load_contributor_activity(client, org)
     if not records:
-        logger.info("No activity data available; skipping active-maintainer + heatmap views")
+        logger.info("No activity data available; skipping activity heatmaps")
         return
-    label_events = load_issue_label_events(client, org)
 
-    last_seen = latest_activity_by_account(records, label_events)
-    cutoff = datetime.now(UTC) - timedelta(days=ROLE_ACTIVE_DAYS)
-
-    active = _write_active_diversity(
-        maintainers,
-        affiliations,
-        last_seen,
-        cutoff,
-        org_data_dir,
-        org_charts_dir,
-        all_summary=all_summary,
-        org=org,
-    )
     _write_activity_heatmaps(records, role_lookup, team_membership, affiliations, org_data_dir, org_charts_dir, org=org)
-    _write_active_composition(
-        role_lookup,
-        team_membership,
-        affiliations,
-        active,
-        last_seen,
-        cutoff,
-        org_data_dir,
-        org_charts_dir,
-        org=org,
-    )
 
 
 def main(org: str = ORG) -> None:
@@ -495,16 +366,13 @@ def main(org: str = ORG) -> None:
             len(team_diversity),
         )
 
-    # Activity-driven views: active-core diversity, the org activity heatmap, and the
-    # "Active" tab variants of the charts above.
+    # Activity-driven views: the org/team/repo activity heatmaps.
     _write_activity_views(
-        maintainers,
         role_lookup,
         team_membership,
         affiliations,
         org_data_dir,
         org_charts_dir,
-        all_summary=summary,
         org=org,
     )
 

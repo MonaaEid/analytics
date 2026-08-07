@@ -11,7 +11,7 @@ export interface ColumnSpec {
   label: string;
   /**
    * Optional display format, rendered by `components/FormattedCell`:
-   * hip | date | link | evidence | status | flag | presence.
+   * hip | date | link | evidence | status | flag | presence | number.
    * The valid set is declared once in Python (`dashboard_spec.COLUMN_FORMATS`)
    * and enforced there, so a spec typo fails a test rather than shipping as an
    * unformatted column.
@@ -41,7 +41,10 @@ export interface ChartSpec {
   variants: ChartVariant[];
   note?: string;
   methodology?: string[];
+  /** Many bars: full row with a horizontal scroll box. */
   wide?: boolean;
+  /** Wide aspect, few bars: full row, scaled to fit (no scroll box). */
+  full_row?: boolean;
 }
 
 export interface ChartDownload {
@@ -55,6 +58,8 @@ export interface ChartSection {
   macro: string;
   title: string;
   description: string;
+  /** Renders inside this named table group (above its tables) instead of the Charts block. */
+  group?: string;
   slideshow?: boolean;
   charts: ChartSpec[];
   /** A companion CSV copied into the API tree, offered as a download. */
@@ -97,6 +102,8 @@ export interface MatrixView {
   id: string;
   kind: "matrix";
   macro: string;
+  /** The named section group this view renders under. */
+  group?: string;
   title: string;
   description: string;
   badge: string;
@@ -126,6 +133,8 @@ export interface BoardView {
   id: string;
   kind: "board";
   macro: string;
+  /** The named section group this view renders under. */
+  group?: string;
   title: string;
   description: string;
   badge: string;
@@ -166,8 +175,21 @@ export interface Manifest {
   generated_at: string;
   /** Each macro's explainer, keyed by macro name — one per tab. */
   macro_glossaries?: Record<string, Glossary>;
+  /** Sub-tab macros: macro name -> umbrella tab name (e.g. "Teams & TSC" -> "Governance"). */
+  macro_parents?: Record<string, string>;
+  /** Family display order for tabs; macros not listed keep their derived order. */
+  macro_order?: string[];
+  /** Why a tab may be empty for an org — shown in place of a blank tab. */
+  macro_absent_notes?: Record<string, string>;
+  /** Macro name -> ordered section-group names; each tab renders as this sequence. */
+  group_order?: Record<string, string[]>;
   /** Display labels for rolling periods ("30d" -> "30 days"). */
   period_labels?: Record<string, string>;
+  /** Where the footer sends a reader who spots something wrong. */
+  issues_url?: string;
+  /** Show the work-in-progress banner. Absent means show — an older cached
+   *  manifest must fail toward warning too long, never hiding too early. */
+  wip?: boolean;
   provenance: { git_sha: string | null; data_as_of: string | null };
   orgs: Record<string, OrgEntry>;
 }

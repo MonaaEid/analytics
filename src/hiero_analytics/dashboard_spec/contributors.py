@@ -13,10 +13,13 @@ from hiero_analytics.dashboard_spec.glossary import glossary_of
 CHART_MACRO = {
     "name": "Contributors",
     "charts": {
-        "hiero-ledger": [
+        # "*": org-independent — these cards render for any org whose pipelines
+        # produced the files (missing variants drop out per org).
+        "*": [
             {
                 "id": "contributor-network",
                 "title": "Contributor network",
+                "group": "Activity & networks",
                 "description": (
                     "The widest view of how work connects the ecosystem: each bubble is a repository "
                     "sized by its active contributors, and two repos are linked when they share "
@@ -28,6 +31,7 @@ CHART_MACRO = {
             {
                 "id": "activity-heatmap",
                 "title": "Activity heatmaps",
+                "group": "Activity & networks",
                 "slideshow": True,
                 "description": (
                     "Weighted monthly activity over the last six months (greener = more active). Slide "
@@ -47,6 +51,7 @@ CHART_MACRO = {
             {
                 "id": "org-overview",
                 "title": "Organization overview (org-wide)",
+                "group": "Org overview",
                 "description": (
                     "Org-wide view of hiero-hackers: repositories ranked by contributor count, "
                     "the language mix across repos, and how many repos pushed in the last 30 days."
@@ -60,6 +65,7 @@ CHART_MACRO = {
             {
                 "id": "contributor-network",
                 "title": "Contributor network",
+                "group": "Activity & networks",
                 "description": (
                     "Each bubble is a repository, sized by its active contributors; two repos are "
                     "linked when they share contributors. Colour = repository type. Click to enlarge."
@@ -69,6 +75,7 @@ CHART_MACRO = {
             {
                 "id": "activity-heatmap",
                 "title": "Contributor activity heatmap",
+                "group": "Activity & networks",
                 "description": (
                     "Weighted monthly activity for the most active contributors over the last six "
                     "months (greener = more active that month)."
@@ -90,13 +97,13 @@ SECTION_SPECS = [
         "description": "Every contributor's org-wide activity in the selected period, most recently active first.",
         "columns": [
             ("contributor", "contributor"),
-            ("prs_opened", "PRs"),
-            ("reviews_given", "reviews"),
-            ("merges_done", "merges"),
-            ("issues_opened", "issues"),
-            ("labels_applied", "labels"),
-            ("repos_touched", "repos"),
-            ("last_active", "last active"),
+            ("prs_opened", "PRs", "number"),
+            ("reviews_given", "reviews", "number"),
+            ("merges_done", "merges", "number"),
+            ("issues_opened", "issues", "number"),
+            ("labels_applied", "labels", "number"),
+            ("repos_touched", "repos", "number"),
+            ("last_active", "last active", "date"),
         ],
     },
 ]
@@ -123,6 +130,10 @@ GLOSSARY = glossary_of(
 )
 
 SECTION_GROUPS = [
+    # Chart-only groups first: the org-wide overview (extra orgs only), then
+    # the network and heatmap cards; the per-person table closes the tab.
+    ("Org overview", []),
+    ("Activity & networks", []),
     # The full per-person list.
     ("All contributors", ["profiles"]),
 ]

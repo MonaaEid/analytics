@@ -76,31 +76,28 @@ CLI_ONLY_CHARTS = {
 # artifact; the CSV is its exportable source) and non-dashboard reports.
 CHART_COMPANION_CSVS = {
     "affiliation_distribution.csv",
-    "affiliation_distribution_active.csv",
-    "maintainer_affiliations_active.csv",
     "repo_affiliation_composition.csv",
-    "repo_affiliation_composition_active.csv",
     "team_affiliation_composition.csv",
-    "team_affiliation_composition_active.csv",
     "repo_affiliation_diversity.csv",  # base for spec section; keep for safety
     "contributor_activity_heatmap.csv",
     "org_activity_heatmap.csv",
     "team_activity_heatmap.csv",
     "repo_activity_heatmap.csv",
-    "difficulty_distribution_30_days.csv",
-    "difficulty_distribution_90_days.csv",
-    "difficulty_distribution_365_days.csv",
-    "difficulty_by_repo_30_days.csv",
-    "difficulty_by_repo_90_days.csv",
-    "difficulty_by_repo_365_days.csv",
+    # Bases; the shared-period variants (_7d/_30d/_365d) are derived below.
+    "difficulty_distribution.csv",
+    "difficulty_by_repo.csv",
     "difficulty_over_time_event_based_weekly.csv",
     "difficulty_over_time_all_event_based_weekly.csv",
     "maintainer_activity_events.csv",
     "gfi_completers.csv",  # Contributors-tab KPI tile source (completed-a-GFI %)
     "maintainer_pipeline_yearly.csv",
+    "maintainer_pipeline_daily.csv",
     "maintainer_pipeline_monthly.csv",
     "maintainer_pipeline_weekly.csv",
     "maintainer_pipeline_by_repo.csv",
+    "maintainer_pipeline_by_repo_365d.csv",
+    "maintainer_pipeline_by_repo_30d.csv",
+    "maintainer_pipeline_by_repo_7d.csv",
     "org_runner_status.csv",
     "language_distribution.csv",
     "push_activity.csv",
@@ -331,7 +328,7 @@ def outputs_root(tmp_path_factory) -> Path:
             mp.setattr(mod, "fetch_governance_config", lambda *_a, **_k: GOVERNANCE)
         for mod in (maintainer_mod, heatmap_mod, role_coverage_mod, affiliation_mod, activity_mod):
             mp.setattr(mod, "load_contributor_activity", lambda _c, org: _org_activity(org))
-        for mod in (role_coverage_mod, affiliation_mod, activity_mod):
+        for mod in (role_coverage_mod, activity_mod):
             mp.setattr(mod, "load_issue_label_events", lambda _c, _org: TIMELINE)
         mp.setattr(affiliation_mod, "load_affiliations", lambda: AFFILIATIONS)
         mp.setattr(affiliation_mod, "load_manual_logins", set)
@@ -387,11 +384,15 @@ def outputs_root(tmp_path_factory) -> Path:
 
 
 def _spec_chart_files() -> dict[str, set[str]]:
-    """Org -> set of chart filenames the spec lists."""
+    """Org -> set of chart filenames the spec lists.
+
+    "*" cards are org-independent and best-effort per org, but the primary org
+    runs every pipeline, so they are pinned against it.
+    """
     per_org: dict[str, set[str]] = {}
     for macro in CHART_MACROS:
         for org, specs in macro["charts"].items():
-            files = per_org.setdefault(org, set())
+            files = per_org.setdefault(PRIMARY if org == "*" else org, set())
             for spec in specs:
                 for _caption, variants in spec["files"]:
                     files.update(filename for _label, filename in variants)

@@ -15,13 +15,24 @@ function Figure({
   chart,
   onZoom,
   slide = false,
+  stretch = false,
 }: {
   chart: ChartSpec;
   onZoom: (chart: ChartSpec, variant: number) => void;
   slide?: boolean;
+  /** Span the full row even though the chart itself is half-width shaped. */
+  stretch?: boolean;
 }) {
   const [variant, setVariant] = useState(0);
   const active = chart.variants[Math.min(variant, chart.variants.length - 1)];
+  // A tall/square chart (a heatmap) in a ~340px gallery cell is illegible, but
+  // the `wide` scroll-box treatment would shrink it to the box height instead.
+  // It gets the full row with natural page flow: the dimensions ship with the
+  // variant, so the shape decides — nobody hand-flags heatmaps.
+  const tall = Boolean(active.width && active.height && active.width / active.height <= 1.05);
+  // Full row without the scroll box: wide-aspect charts with few bars scale to
+  // fit; only hand-flagged `wide` charts (many bars) get horizontal scrolling.
+  const fullRow = chart.wide || chart.full_row || tall || stretch;
   const img = (
     <img
       src={chartUrl(active.file)}
@@ -36,7 +47,7 @@ function Figure({
     />
   );
   return (
-    <figure className={slide ? "slide" : chart.wide ? "chart wide" : "chart"}>
+    <figure className={slide ? "slide" : fullRow ? "chart wide" : "chart"}>
       {chart.variants.length > 1 && (
         <div className="charttabs">
           {chart.variants.map((option, index) => (
@@ -74,6 +85,21 @@ export function ChartSectionCard({
       methodology: chart.methodology,
     });
   const count = section.charts.length;
+
+  // The gallery lays half-width charts out in pairs; full-row charts break the
+  // pairing. A half-width chart stretches to the full row only when it is the
+  // *only* half-width chart in the gallery (every sibling is full-row, so it
+  // could never have a partner). With two or more half-width siblings they all
+  // stay half — a trailing odd one out at half width reads better than one
+  // chart rendering huge next to its same-shaped siblings. Variant 0's shape
+  // decides, keeping the grid stable while variant tabs switch.
+  const isFullRow = (chart: ChartSpec) => {
+    const first = chart.variants[0];
+    const tall = Boolean(first.width && first.height && first.width / first.height <= 1.05);
+    return Boolean(chart.wide || chart.full_row || tall);
+  };
+  const halfCount = section.charts.filter((chart) => !isFullRow(chart)).length;
+  const stretched = section.charts.map((chart) => isFullRow(chart) || halfCount === 1);
 
   const download = section.download;
   return (
@@ -113,8 +139,8 @@ export function ChartSectionCard({
         </div>
       ) : (
         <div className="gallery">
-          {section.charts.map((chart) => (
-            <Figure key={chart.title} chart={chart} onZoom={onZoom} />
+          {section.charts.map((chart, index) => (
+            <Figure key={chart.title} chart={chart} onZoom={onZoom} stretch={stretched[index]} />
           ))}
         </div>
       )}

@@ -7,8 +7,9 @@ are currently active or **quiet in that repo** (no activity in that window) — 
 combined ``role_coverage_all`` table (filter by repo) and the inverse
 promotion-candidate list. Status and days-since-active reflect all-time recency.
 Because roles are granted per repo, the only org-wide quiet list is
-``role_coverage_globally_quiet``: holders with no activity in *any* repo for over
-``GONE_DARK_DAYS`` days. Also emits team-activity and TSC tables.
+``role_coverage_globally_quiet``: holders with no activity in *any* repo within
+the shared activity periods (the base file lists holders never active at all).
+Also emits team-activity and TSC tables.
 
 This complements the role-agnostic contributor-activity tables; here we use the
 role names deliberately, to show each permission-holder's recent activity in the
@@ -46,7 +47,6 @@ from hiero_analytics.analysis.team_activity import (
     build_team_activity_summary,
 )
 from hiero_analytics.config.analysis import (
-    GONE_DARK_DAYS,
     LOAD_SHARE_MIN_ACTIONS,
     ROLE_ACTIVE_DAYS,
     ROLE_NETWORK_MIN_SHARED,
@@ -65,8 +65,8 @@ from hiero_analytics.pipelines._shared import load_contributor_activity, load_is
 from hiero_analytics.plotting.network import render_comembership_network
 
 logger = logging.getLogger(__name__)
-# Thresholds live in config.analysis (ROLE_ACTIVE_DAYS, GONE_DARK_DAYS, the network
-# link cutoffs, etc.) so they're discoverable and tunable in one place.
+# Thresholds live in config.analysis (ROLE_ACTIVE_DAYS, the network link
+# cutoffs, etc.) so they're discoverable and tunable in one place.
 
 
 def _build_profile_sets(records, label_events, now):
@@ -196,28 +196,31 @@ def _write_team_tables(
     (``role_coverage_all.csv``) already has repo+user+role+activity at the same
     per-person granularity, filterable to any maintainer.
     """
-    globally_quiet = find_globally_quiet_role_holders(
-        role_lookup, global_last_seen, now=now, threshold_days=GONE_DARK_DAYS
-    )
-    save_dataframe(globally_quiet, org_data_dir / "role_coverage_globally_quiet.csv")
-    logger.info("%d role-holders with no activity in any repo (>%d days)", len(globally_quiet), GONE_DARK_DAYS)
-
-    team_members = build_team_membership(config)
-    period_summaries = {}
+    # The quiet table follows the shared periods: the base ("All time") lists
+    # holders with no recorded activity at all; each variant lists those with
+    # none inside that window. The fixed-threshold "quiet 180d+" KPI tile is
+    # derived from the 1-month variant in export/macro_metrics (quiet for a
+    # month is a superset of quiet for 180 days).
+    never_active = find_globally_quiet_role_holders(role_lookup, global_last_seen, now=now, threshold_days=None)
+    save_dataframe(never_active, org_data_dir / "role_coverage_globally_quiet.csv")
     for period in ACTIVITY_PERIODS:
-        summary = build_team_activity_summary(
-            team_members, all_time_org_profiles, global_last_seen, now=now, dark_after_days=period.days
+        globally_quiet = find_globally_quiet_role_holders(
+            role_lookup, global_last_seen, now=now, threshold_days=period.days
         )
-        period_summaries[period.days] = summary
-        save_dataframe(summary, org_data_dir / period.filename("team_activity_summary"))
+        save_dataframe(globally_quiet, org_data_dir / period.filename("role_coverage_globally_quiet"))
+    logger.info("%d role-holders with no recorded activity in any repo, ever", len(never_active))
 
-    team_summary = period_summaries.get(GONE_DARK_DAYS)
-    if team_summary is None:
-        team_summary = build_team_activity_summary(
-            team_members, all_time_org_profiles, global_last_seen, now=now, dark_after_days=GONE_DARK_DAYS
-        )
+    # The base ("All time") team summary: all-time counts, and a team is quiet
+    # only if no member has any recorded activity at all (dark_after_days=None
+    # is the all-time reading). The period variants — windowed counts *and*
+    # windowed status — are written from the main period loop alongside the
+    # other tables (#286). The fixed-180d "quiet teams" KPI tile is derived
+    # from this base table's days_since_active in export/macro_metrics.
+    team_members = build_team_membership(config)
+    team_summary = build_team_activity_summary(
+        team_members, all_time_org_profiles, global_last_seen, now=now, dark_after_days=None
+    )
     team_by_repo = build_team_activity_by_repo(team_members, all_time_by_repo)
-    # Keep the configured-window filename for downstream consumers that predate period variants.
     save_dataframe(team_summary, org_data_dir / "team_activity_summary.csv")
     save_dataframe(team_by_repo, org_data_dir / "team_activity_by_repo.csv")
     quiet_teams = int((team_summary["status"] == "quiet").sum()) if not team_summary.empty else 0
@@ -260,13 +263,12 @@ def main(org: str = ORG) -> None:
         _write_role_networks(combined, org_charts_dir, org)
 
     for period in ACTIVITY_PERIODS:
+        # Every ACTIVITY_PERIODS entry is a bounded window (all-time is the
+        # base file, not a period), so the cutoff is always a real datetime.
         cutoff = period.cutoff(now)
-        if cutoff is None:
-            period_by_repo = all_time_by_repo
-        else:
-            period_records = [record for record in records if record.occurred_at and record.occurred_at >= cutoff]
-            period_labels = [event for event in label_events if event.occurred_at and event.occurred_at >= cutoff]
-            period_by_repo = build_contributor_profiles_by_repo(period_records, period_labels)
+        period_records = [record for record in records if record.occurred_at and record.occurred_at >= cutoff]
+        period_labels = [event for event in label_events if event.occurred_at and event.occurred_at >= cutoff]
+        period_by_repo = build_contributor_profiles_by_repo(period_records, period_labels)
         period_coverage = _build_role_coverage(
             roles_by_repo,
             all_time_by_repo,
@@ -279,6 +281,29 @@ def main(org: str = ORG) -> None:
         )
         save_dataframe(period_coverage, org_data_dir / period.filename("role_coverage_all"))
         _write_repo_summaries(period_coverage, org_data_dir, period)
+
+        # The team and TSC tables follow the same periods as every other
+        # table: same builders, windowed profiles. The team summary's counts
+        # are windowed too (#286) — org-level profiles rebuilt from the
+        # period's records, not the all-time table with a windowed status.
+        team_members = build_team_membership(config)
+        period_org_profiles = build_contributor_profiles(period_records, period_labels)
+        save_dataframe(
+            build_team_activity_summary(
+                team_members, period_org_profiles, global_last_seen, now=now, dark_after_days=period.days
+            ),
+            org_data_dir / period.filename("team_activity_summary"),
+        )
+        save_dataframe(
+            build_team_activity_by_repo(team_members, period_by_repo),
+            org_data_dir / period.filename("team_activity_by_repo"),
+        )
+        save_dataframe(
+            annotate_repo_roles(
+                build_account_activity_by_repo(team_members.get("tsc", set()), period_by_repo), role_lookup
+            ),
+            org_data_dir / period.filename("tsc_activity_by_repo"),
+        )
 
     _write_team_tables(
         config, role_lookup, all_time_by_repo, all_time_org_profiles, global_last_seen, org_data_dir, now=now

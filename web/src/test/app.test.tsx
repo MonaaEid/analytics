@@ -34,17 +34,24 @@ describe("App shell", () => {
     expect(screen.getByText("Maintainer pipeline")).toBeInTheDocument();
   });
 
-  it("shows org tabs only on macros where more than one org has content", async () => {
+  it("keeps the org filter global and sticky, explaining tabs the org lacks", async () => {
     render(<App />);
 
-    // Contributors: both orgs -> org tab bar present.
+    // The org filter is present on every tab.
     await userEvent.click(await screen.findByRole("button", { name: "Contributors" }));
     expect(await screen.findByRole("button", { name: "hiero-hackers" })).toBeInTheDocument();
 
-    // Governance: only hiero-ledger -> no org tab bar.
+    // Select hiero-hackers, then open Governance: the selection sticks, and
+    // the tab explains why this org has no governance content.
+    await userEvent.click(screen.getByRole("button", { name: "hiero-hackers" }));
+    await screen.findByText("erin");
     await userEvent.click(screen.getByRole("button", { name: "Governance" }));
-    await screen.findByText("Role holders");
-    expect(screen.queryByRole("button", { name: "hiero-hackers" })).not.toBeInTheDocument();
+    expect(await screen.findByText(/need a published governance config/)).toBeInTheDocument();
+    expect(screen.queryByText("Role holders")).not.toBeInTheDocument();
+
+    // Switching back to hiero-ledger restores the tab's content.
+    await userEvent.click(screen.getByRole("button", { name: "hiero-ledger" }));
+    expect(await screen.findByText("Role holders")).toBeInTheDocument();
   });
 
   it("switching org swaps the rendered rows", async () => {
@@ -63,13 +70,22 @@ describe("App shell", () => {
     expect(screen.getByText("maintainers")).toBeInTheDocument();
     expect(screen.getByText("103")).toBeInTheDocument();
     expect(screen.getByText("How to read this — what each column means")).toBeInTheDocument();
-    // Each group appears twice: once in the jump bar, once as its header, and
-    // the jump link targets that group's own anchor.
-    const charts = screen.getByRole("link", { name: "Charts" });
-    expect(charts.getAttribute("href")).toMatch(/^#grp-\d+-Charts$/);
-    expect(screen.getAllByText("Charts")).toHaveLength(2);
+    // Each group appears twice: once in the jump bar (a button — deliberately
+    // not a fragment link, which would clobber the tab/org hash state), once
+    // as its header. The chart card renders under its own named group — there
+    // is no generic "Charts" section any more.
+    expect(screen.getByRole("button", { name: "Pipeline charts" })).toBeInTheDocument();
+    expect(screen.getAllByText("Pipeline charts")).toHaveLength(2);
+    expect(screen.queryByText("Charts")).not.toBeInTheDocument();
     expect(screen.getAllByText("Roles & teams")).toHaveLength(2);
     expect(screen.getByText(/Work in progress/)).toBeInTheDocument();
+    // The footer is the general "something looks wrong" route: only the
+    // affiliations table carries a contextual correction link, so pointing
+    // readers at "a table's link" left most tabs with no way to report.
+    expect(screen.getByRole("link", { name: "Open an issue" })).toHaveAttribute(
+      "href",
+      "https://example.test/issues",
+    );
     expect(screen.getByText(/data 2026-07-25 21:00 UTC · code abc1234/)).toBeInTheDocument();
   });
 });
@@ -107,12 +123,30 @@ describe("Section tables", () => {
     await openGovernance();
     expect(screen.getByText("bob")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "30 days" }));
+    await userEvent.click(screen.getByRole("button", { name: "1 month" }));
     expect(screen.queryByText("bob")).not.toBeInTheDocument();
     expect(screen.getByText("alice")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "All time" }));
     expect(screen.getByText("bob")).toBeInTheDocument();
+  });
+
+  it("formats number columns with separators and tabular figures", async () => {
+    await openGovernance();
+
+    const cell = screen.getByText("2,490"); // 2490 renders with a separator
+    // Cells centre by default; `num` is what earns a column tabular digits.
+    expect(cell.closest("td")).toHaveClass("num");
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("count").closest("th")).toHaveClass("num");
+  });
+
+  it("offers the period windows shortest-first, with all time last", async () => {
+    await openGovernance();
+
+    const tabs = within(screen.getByRole("group", { name: "Time range" })).getAllByRole("button");
+
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["1 month", "All time"]);
   });
 
   it("renders date formats, the freshness badge, and the action link", async () => {
@@ -239,7 +273,31 @@ describe("Section groups", () => {
 
     const ids = [...container.querySelectorAll("details.group")].map((el) => el.id);
     expect(new Set(ids).size).toBe(3); // no duplicate DOM ids
-    const hrefs = [...container.querySelectorAll("a.jbtn")].map((el) => el.getAttribute("href"));
-    expect(hrefs).toEqual(ids.map((id) => `#${id}`)); // every jump link targets its own group
+
+    // Every jump button scrolls its own group, even under name collisions.
+    const scrolled: Element[] = [];
+    const spy = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(function (this: Element) {
+        scrolled.push(this);
+      });
+    for (const button of container.querySelectorAll("button.jbtn")) {
+      await userEvent.click(button);
+    }
+    spy.mockRestore();
+    expect(scrolled.map((el) => el.id)).toEqual(ids);
+  });
+
+  it("jumping to a group keeps the active tab and the hash state (#342)", async () => {
+    await openGovernance();
+    expect(window.location.hash).toContain("tab=Governance");
+
+    await userEvent.click(screen.getByRole("button", { name: "Roles & teams" }));
+
+    // The jump must not clobber the hash the app stores its state in: the
+    // Governance content is still on screen and the hash still names the tab.
+    expect(screen.getByText("Role holders")).toBeInTheDocument();
+    expect(window.location.hash).toContain("tab=Governance");
+    expect(window.location.hash).not.toContain("grp-");
   });
 });

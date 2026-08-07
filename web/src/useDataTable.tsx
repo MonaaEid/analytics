@@ -16,6 +16,16 @@ import {
 import type { ColumnSpec, Row } from "./api";
 import { FormattedCell } from "./components/FormattedCell";
 
+// Column meta this app attaches: whether the column holds numbers, which earns
+// it tabular figures so digits keep a constant width. Alignment itself is not
+// per-column — every cell centres (see the `th`/`td` rules).
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- interface merging requires the type params
+  interface ColumnMeta<TData, TValue> {
+    numeric?: boolean;
+  }
+}
+
 /** Sortable value: raw for numbers, string otherwise (matches legacy sort). */
 function sortableValue(row: Row, key: string): number | string {
   const value = row[key];
@@ -33,6 +43,7 @@ export function useDataTable(columns: ColumnSpec[], rows: Row[], columnsKey: str
           id: spec.key,
           header: spec.label,
           cell: (context) => <FormattedCell value={context.row.original[spec.key]} format={spec.format} />,
+          meta: { numeric: spec.format === "number" },
         }),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- columns derive from the key

@@ -32,6 +32,51 @@
   --row-line: #f0f0f0; /* table row separators */
   --accent: #1b1b1b; /* active pill background */
   --on-accent: #fff; /* text on the active pill */
+
+  /* Semantic colors: one slot per meaning, dark values in the flip below. */
+  --link: #2a78d6; /* links and link-styled cells */
+  --link-ink: #255e9e; /* link-colored text that must read as text */
+  --ok: #0ca30c; /* positive dot/marker */
+  --ok-ink: #0a6b0a; /* positive text */
+  --warn: #fab219; /* warning dot/marker */
+  --warn-ink: #8a6200; /* warning text */
+  --neg: #b3261e; /* error text */
+
+  /* Shape & motion: shared control geometry, one hover timing everywhere. */
+  --r-card: 12px;
+  --r-control: 6px;
+  --r-frame: 8px; /* inputs, scroll boxes, and framed chart media */
+  --r-pill: 999px;
+  --dur: 120ms;
+
+  /* Deliberately outside the light/dark flip below.
+     --chart-ground: chart PNGs carry a baked-in light background, so their
+     container must match it in either scheme or the image floats on a slab of
+     the wrong colour. It stops being a constant when the charts themselves
+     become theme-aware (see the chart legibility issue).
+     --lb-*: the lightbox is always dark on purpose, so its greys are scoped to
+     it rather than themed — three roles instead of the six one-off values
+     these replaced. */
+  --chart-ground: #fff;
+  --lb-title: #fff;
+  --lb-text: #e2e2e2;
+  --lb-dim: #bbb;
+  --lb-bright: #eee;
+
+  /* HIP coverage-matrix heat ramp: more merged PRs = more ink. Mirrors
+     HIP_EVIDENCE_RAMP (config/charts.py), which the same values reach the
+     matplotlib charts through; the matrix legend now renders these classes
+     rather than the shipped hex, so cells and legend cannot drift apart. */
+  --heat-1: #cde2fb;
+  --heat-2: #9ec5f4;
+  --heat-3: #5598e7;
+  --heat-4: #2a78d6;
+  --heat-5: #104281;
+  --on-heat-low: #1b1b1b; /* text on the two palest buckets */
+  --on-heat-high: #fff; /* text on the three strongest */
+  --heat-open: #2a78d6; /* outline + text for "open PRs only" */
+  --heat-open-edge: #9ec5f4;
+  --flash: #fff3d6; /* row highlight when the board jumps to a HIP */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -49,6 +94,29 @@
     --row-line: #222;
     --accent: #e6e6e6;
     --on-accent: #0f0f0f;
+
+    --link: #6ba3e8;
+    --link-ink: #8ab4e8;
+    --ok: #34b334;
+    --ok-ink: #7fd08a;
+    --warn: #d9a12e;
+    --warn-ink: #d9b05c;
+    --neg: #e57373;
+
+    /* The ramp inverts on a dark ground: "more" has to mean *brighter*, since
+       ink-on-white becomes light-on-black. Reusing the light ramp here would
+       put its palest, loudest bucket on the lowest counts and sink the highest
+       into the page. */
+    --heat-1: #16304a;
+    --heat-2: #1d4a75;
+    --heat-3: #2a6fb0;
+    --heat-4: #4a92e2;
+    --heat-5: #8cc0f5;
+    --on-heat-low: #dce9f8;
+    --on-heat-high: #0f0f0f;
+    --heat-open: #6ba3e8;
+    --heat-open-edge: #2a6fb0;
+    --flash: #4a3a12;
   }
 }
 
@@ -66,6 +134,13 @@
   --color-row-line: var(--row-line);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
+  --color-link: var(--link);
+  --color-link-ink: var(--link-ink);
+  --color-ok: var(--ok);
+  --color-ok-ink: var(--ok-ink);
+  --color-warn: var(--warn);
+  --color-warn-ink: var(--warn-ink);
+  --color-neg: var(--neg);
 }
 
 /* ---- Page & element defaults --------------------------------------------- */
@@ -80,9 +155,15 @@
     background: var(--page);
   }
   h1 {
-    font-size: 22px;
-    font-weight: 600;
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
     margin: 0 0 4px;
+  }
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
   }
   table {
     border-collapse: collapse;
@@ -93,34 +174,46 @@
     position: sticky;
     top: 0;
     background: var(--raise);
-    text-align: left;
+    text-align: center;
     padding: 8px 10px;
     cursor: pointer;
     white-space: nowrap;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--edge);
     font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    transition: color var(--dur);
   }
   th:hover {
-    background: #ececec;
+    color: var(--ink);
   }
   td {
     padding: 6px 10px;
     border-bottom: 1px solid var(--row-line);
     white-space: nowrap;
+    text-align: center;
+  }
+  td:first-child {
+    font-weight: 500;
+  }
+  /* Cells centre by default (see `th`/`td`). Numeric columns additionally use
+     tabular figures so digits keep a constant width and columns of numbers
+     still line up under a centred heading. */
+  td.num {
+    font-variant-numeric: tabular-nums;
   }
   tr:hover td {
-    background: #fbfbfb;
+    background: var(--raise);
   }
-  @media (prefers-color-scheme: dark) {
-    th {
-      background: #222;
-      border-color: #333;
-    }
-    th:hover {
-      background: #2a2a2a;
-    }
-    tr:hover td {
-      background: #1d1d1d;
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
   }
 }
@@ -128,10 +221,64 @@
 /* ---- Component vocabulary ------------------------------------------------ */
 
 @layer components {
+  /* Shared control behaviour: one timing, one focus ring, everywhere. */
+  .macro,
+  .tab,
+  .jbtn,
+  .dl,
+  .snav,
+  .ctab,
+  .chip {
+    transition:
+      background var(--dur),
+      border-color var(--dur),
+      color var(--dur);
+  }
+
+  /* One bordered-surface button. The variants below differ only in size and
+     shape — before this they were four near-identical rule blocks that drifted
+     apart on hover behaviour and colour. Add a variant by setting the two
+     custom properties, not by restating the whole treatment. */
+  .dl,
+  .snav,
+  .ctab,
+  .jbtn {
+    font: inherit;
+    font-size: var(--btn-size, 13px);
+    padding: var(--btn-pad, 5px 12px);
+    border: 1px solid var(--edge-strong);
+    border-radius: var(--r-control);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .dl:hover,
+  .snav:hover,
+  .ctab:hover:not(.active),
+  .jbtn:hover {
+    background: var(--raise);
+  }
+  :is(.macro, .tab, .jbtn, .dl, .snav, .ctab, .thbtn, .search, .lbclose):focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+
   .sub {
     color: var(--muted);
     font-size: 14px;
     margin: 0 0 20px;
+  }
+
+  /* A tab the selected org has no content for: the "why" note in place of
+     the panel, sized to read as information rather than an error. */
+  .empty {
+    color: var(--muted);
+    font-size: 15px;
+    max-width: 640px;
+    margin: 48px auto;
+    text-align: center;
+    line-height: 1.6;
   }
 
   /* Macro (top-level) tabs */
@@ -145,11 +292,11 @@
     padding: 9px 18px;
     border: 1px solid var(--edge-input);
     background: var(--surface);
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
-    color: #444;
+    color: var(--ink);
     text-decoration: none;
     display: inline-block;
   }
@@ -158,8 +305,9 @@
     color: var(--on-accent);
     border-color: var(--accent);
   }
-  .macro:hover {
-    border-color: #999;
+  .macro:hover:not(.active) {
+    border-color: var(--soft);
+    background: var(--raise);
   }
 
   /* Org tabs */
@@ -167,7 +315,7 @@
     display: flex;
     gap: 6px;
     margin-bottom: 18px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--edge);
     flex-wrap: wrap;
   }
   .tab {
@@ -182,7 +330,7 @@
   }
   .tab.active {
     color: var(--ink);
-    border-bottom-color: #555;
+    border-bottom-color: var(--ink);
     font-weight: 600;
   }
   .tab:hover {
@@ -193,7 +341,7 @@
   .card {
     background: var(--surface);
     border: 1px solid var(--edge);
-    border-radius: 12px;
+    border-radius: var(--r-card);
     padding: 16px 18px;
     margin-bottom: 20px;
   }
@@ -206,21 +354,31 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 8px;
+    gap: 8px 16px;
+  }
+  .sactions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex: none;
+  }
+  .sactions .actionrow {
+    display: flex;
+    gap: 6px;
   }
   .dl {
+    --btn-size: 12px;
+    --btn-pad: 5px 11px;
     flex: none;
-    font-size: 12px;
-    padding: 5px 11px;
-    border: 1px solid var(--edge-strong);
-    border-radius: 6px;
-    background: var(--surface);
-    color: #333;
-    cursor: pointer;
-    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
-  .dl:hover {
-    background: var(--raise);
+  .dl svg {
+    width: 13px;
+    height: 13px;
+    flex: none;
   }
   .desc {
     color: var(--muted);
@@ -237,7 +395,7 @@
   .glossary {
     margin: 0 0 18px;
     border: 1px solid var(--edge);
-    border-radius: 10px;
+    border-radius: var(--r-card);
     background: var(--surface);
     padding: 0 14px;
   }
@@ -256,15 +414,15 @@
   }
   .glossary dt {
     font-weight: 600;
-    color: #333;
+    color: var(--ink);
   }
   .glossary dd {
     margin: 0;
-    color: #555;
+    color: var(--muted);
   }
   .gnote {
     font-size: 12px;
-    color: #777;
+    color: var(--soft);
     margin: 6px 0 12px;
   }
 
@@ -274,7 +432,7 @@
     box-sizing: border-box;
     padding: 8px 10px;
     border: 1px solid var(--edge-input);
-    border-radius: 8px;
+    border-radius: var(--r-frame);
     font-size: 14px;
     margin-bottom: 12px;
     background: var(--surface);
@@ -284,7 +442,7 @@
     overflow: auto;
     max-height: 520px;
     border: 1px solid var(--edge-faint);
-    border-radius: 8px;
+    border-radius: var(--r-frame);
   }
   details.tsec {
     padding-top: 14px;
@@ -302,7 +460,7 @@
   }
   .tsum::before {
     content: "\25B8";
-    color: #aaa;
+    color: var(--soft);
     font-size: 13px;
     transition: transform 0.15s ease;
   }
@@ -318,9 +476,10 @@
   .sbadge {
     font-size: 12px;
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
     color: var(--soft);
-    background: #f0f0f0;
-    border-radius: 999px;
+    background: var(--raise);
+    border-radius: var(--r-pill);
     padding: 2px 10px;
     white-space: nowrap;
   }
@@ -339,11 +498,12 @@
   .asof {
     display: inline-block;
     font-size: 0.78rem;
-    color: #64748b;
-    margin: 0 0 8px;
+    color: var(--soft);
+    margin: 0;
+    white-space: nowrap;
   }
   .asof.stale {
-    color: #b45309;
+    color: var(--warn-ink);
     font-weight: 600;
   }
 
@@ -356,16 +516,22 @@
   .chart {
     margin: 0;
   }
+  /* Framed chart media: the same border/radius/ground wherever a chart PNG
+     is shown, so a change lands once instead of in three places. */
+  .chart img,
+  .chartscroll,
+  .slide img {
+    border: 1px solid var(--edge-faint);
+    border-radius: var(--r-frame);
+    background: var(--chart-ground);
+  }
   .chart img {
     width: 100%;
     height: auto;
-    border: 1px solid var(--edge-faint);
-    border-radius: 8px;
-    background: #fff;
     cursor: zoom-in;
   }
   .chart img:hover {
-    border-color: #bbb;
+    border-color: var(--edge-strong);
   }
   .chart figcaption {
     font-size: 12px;
@@ -379,9 +545,6 @@
   .chartscroll {
     overflow-x: auto;
     overflow-y: hidden;
-    border: 1px solid var(--edge-faint);
-    border-radius: 8px;
-    background: #fff;
   }
   .chartscroll img {
     width: auto;
@@ -395,7 +558,7 @@
   .chartnote {
     margin: 6px 0 0;
     font-size: 12px;
-    color: #555;
+    color: var(--muted);
     line-height: 1.45;
     text-align: left;
   }
@@ -405,22 +568,14 @@
     margin-bottom: 8px;
   }
   .ctab {
-    font: inherit;
-    font-size: 12px;
-    padding: 3px 11px;
-    border: 1px solid var(--edge-strong);
-    border-radius: 6px;
-    background: var(--surface);
+    --btn-size: 12px;
+    --btn-pad: 3px 11px;
     color: var(--muted);
-    cursor: pointer;
-  }
-  .ctab:hover {
-    background: var(--raise);
   }
   .ctab.active {
-    background: #333;
-    color: #fff;
-    border-color: #333;
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
     font-weight: 500;
   }
 
@@ -432,16 +587,7 @@
     margin-bottom: 10px;
   }
   .snav {
-    font-size: 13px;
-    padding: 6px 14px;
-    border: 1px solid var(--edge-strong);
-    border-radius: 6px;
-    background: var(--surface);
-    color: #333;
-    cursor: pointer;
-  }
-  .snav:hover {
-    background: var(--raise);
+    --btn-pad: 6px 14px;
   }
   .scount {
     font-size: 13px;
@@ -450,16 +596,11 @@
   .slide img {
     width: 100%;
     height: auto;
-    aspect-ratio: 4 / 3;
-    object-fit: contain;
-    border: 1px solid var(--edge-faint);
-    border-radius: 8px;
-    background: #fff;
     cursor: zoom-in;
   }
   .slide figcaption {
     font-size: 13px;
-    color: #444;
+    color: var(--muted);
     margin-top: 8px;
     text-align: center;
     font-weight: 600;
@@ -469,11 +610,15 @@
   .lightbox {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.88);
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(4px);
     display: none;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    /* Not centered via justify-content: the auto margins below centre content
+       that fits and top-align content that overflows, so a tall heatmap
+       scrolls at readable size instead of shrinking to fit. */
+    overflow-y: auto;
     gap: 14px;
     z-index: 1000;
     cursor: zoom-out;
@@ -481,21 +626,40 @@
     box-sizing: border-box;
   }
   .lightbox img {
+    margin-top: auto;
     max-width: 96vw;
-    max-height: 66vh;
-    border-radius: 8px;
+    border-radius: var(--r-frame);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    background: #fff;
+    background: var(--chart-ground);
   }
   .lightbox .hint {
     position: fixed;
+    top: 20px;
+    right: 64px;
+    color: var(--lb-dim);
+    font-size: 13px;
+    line-height: 28px;
+  }
+  .lbclose {
+    position: fixed;
     top: 16px;
     right: 20px;
-    color: #ccc;
-    font-size: 13px;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-pill);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--lb-bright);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--dur);
+  }
+  .lbclose:hover {
+    background: rgba(255, 255, 255, 0.2);
   }
   .lbtitle {
-    color: #fff;
+    color: var(--lb-title);
     font-size: 18px;
     font-weight: 600;
     margin: 0;
@@ -503,8 +667,8 @@
   }
   .lbcap {
     max-width: 760px;
-    margin: 0;
-    color: #e2e2e2;
+    margin: 0 0 auto;
+    color: var(--lb-text);
     font-size: 14px;
     line-height: 1.5;
     text-align: center;
@@ -516,7 +680,7 @@
     display: none;
   }
   .lbcap .chartnote {
-    color: #e2e2e2;
+    color: var(--lb-text);
     margin: 0;
     text-align: center;
   }
@@ -526,18 +690,18 @@
   }
   .lbmethod summary {
     cursor: pointer;
-    color: #bbb;
+    color: var(--lb-dim);
     font-size: 13px;
     text-align: center;
     list-style-position: inside;
   }
   .lbmethod summary:hover {
-    color: #e2e2e2;
+    color: var(--lb-text);
   }
   .lbmethod ol {
     margin: 10px auto 0;
     padding-left: 20px;
-    color: #cfcfcf;
+    color: var(--lb-text);
     font-size: 13px;
     max-width: 680px;
   }
@@ -565,25 +729,20 @@
     font-weight: 600;
     margin-right: 2px;
   }
+  /* The pill variant: same button, rounded and with a lighter resting edge. */
   .jbtn {
-    font-size: 13px;
-    padding: 5px 12px;
-    border: 1px solid var(--edge-input);
-    border-radius: 999px;
-    background: var(--surface);
-    color: #444;
-    cursor: pointer;
-    text-decoration: none;
+    border-radius: var(--r-pill);
+    border-color: var(--edge-input);
   }
   .jbtn:hover {
-    border-color: #999;
+    border-color: var(--soft);
   }
   .grouphdr {
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #999;
+    color: var(--soft);
     margin: 24px 0 12px;
     padding-bottom: 6px;
     border-bottom: 1px solid var(--edge);
@@ -599,26 +758,36 @@
     content: "\25be";
     display: inline-block;
     width: 1.1em;
-    color: #bbb;
+    color: var(--soft);
     transition: transform 0.15s;
   }
   .group:not([open]) > summary.grouphdr::before {
     transform: rotate(-90deg);
   }
   .group:not([open]) > summary.grouphdr {
-    color: #bbb;
+    color: var(--edge-strong);
   }
 
   /* App extras (no legacy counterpart) */
   .error {
-    color: #b3261e;
+    color: var(--neg);
     font-size: 14px;
   }
+  .footrow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 36px;
+    padding-top: 14px;
+    border-top: 1px solid var(--edge);
+  }
   .provenance {
-    color: #8a93b2;
+    color: var(--soft);
     font-size: 12px;
     text-align: right;
-    margin: 8px 0 0;
+    margin: 0 0 0 auto;
   }
 
   /* Formatted table cells (chips, HIP badges, links). */
@@ -628,112 +797,97 @@
     gap: 5px;
     font-size: 11.5px;
     font-weight: 600;
-    border-radius: 999px;
+    border-radius: var(--r-pill);
     padding: 1px 9px;
-    border: 1px solid #e4e4e4;
-    background: #fff;
+    border: 1px solid var(--edge);
+    background: var(--surface);
   }
   .chip::before {
     content: "";
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--dot, #999);
+    background: var(--dot, var(--soft));
   }
   .chip-merged {
-    --dot: #0ca30c;
-    color: #0a6b0a;
+    --dot: var(--ok);
+    color: var(--ok-ink);
   }
   .chip-open {
-    --dot: #fab219;
-    color: #8a6200;
+    --dot: var(--warn);
+    color: var(--warn-ink);
   }
   .chip-none {
-    --dot: #c2c2c2;
-    color: #888;
+    --dot: var(--edge-strong);
+    color: var(--soft);
   }
   .chip-spec {
-    --dot: #2a78d6;
-    color: #255e9e;
+    --dot: var(--link);
+    color: var(--link-ink);
   }
   .cell-hip {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
+
+  /* Sortable column headers: a real button, with the sort mark's slot
+     reserved so toggling never shifts the column. */
+  .thbtn {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+  }
+  .sortmark {
+    display: inline-block;
+    width: 1em;
+    color: var(--soft);
+    text-transform: none;
+  }
   .cell-link {
     font-size: 12px;
-    color: #2a78d6;
+    color: var(--link);
     text-decoration: none;
   }
   .cell-link:hover {
     text-decoration: underline;
   }
 
-  /* Dark-mode leftovers: one-off grays that are not (yet) tokens. */
+  /* (The former dark-mode leftovers block is gone: every rule it patched now
+     reads from the semantic tokens, whose dark values live in the single
+     token flip at the top of this file.) */
+
+  /* Chart PNGs bake a light ground (config/charts.py), so in dark mode the
+     gallery was a wall of white slabs. Inverting with a hue rotation keeps the
+     series hues recognisable while the ground goes dark — the pragmatic fix
+     for the PNG era; client-rendered charts will retire it. The lightbox is
+     exempt: it is always dark, and readers zoom in for a faithful look. */
   @media (prefers-color-scheme: dark) {
-    .macro,
-    .jbtn {
-      color: #ccc;
-    }
-    .macro:hover,
-    .jbtn:hover {
-      border-color: #666;
-    }
-    .tabbar {
-      border-color: #2a2a2a;
-    }
-    .tab.active {
-      border-bottom-color: #888;
-    }
-    .dl,
-    .snav {
-      color: #e6e6e6;
-    }
-    .scount,
-    .slide figcaption {
-      color: #bbb;
-    }
-    .glossary dt {
-      color: #ccc;
-    }
-    .glossary dd,
-    .gnote {
-      color: #999;
-    }
-    .chartnote {
-      color: #aaa;
-    }
-    .ctab.active {
-      background: #e6e6e6;
-      color: #0f0f0f;
-      border-color: #e6e6e6;
-    }
-    .sbadge {
-      background: #262626;
-    }
-    .grouphdr {
-      color: #888;
-    }
     .chart img,
-    .chartscroll,
+    .chartscroll img,
     .slide img {
-      border-color: #333;
+      filter: invert(0.9) hue-rotate(180deg);
     }
   }
 
 
   /* ---- HIP views (coverage matrix, governance board, evidence panel) ----
-     Ported verbatim from the legacy dashboard, literal values on purpose:
-     these views shipped light-styled in both color schemes on main, and
-     exact parity beats tokenising until the HIP tab gets a designed dark
-     pass. The cell heat colors mirror HIP_EVIDENCE_RAMP (config/charts.py),
-     which the API also ships as each matrix's `ramp`. */
+     Expressed through the semantic tokens like the rest of the stylesheet, so
+     the HIPs tab follows the light/dark flip instead of staying light-styled
+     on a dark page. The heat buckets read from --heat-*, which inverts for
+     dark mode (see the palette); the matrix legend renders the same classes,
+     so cells and legend cannot drift. */
   .hipmx-wrap {
     overflow: auto;
     max-height: 560px;
-    border: 1px solid #eee;
-    border-radius: 8px;
+    border: 1px solid var(--edge-faint);
+    border-radius: var(--r-frame);
     padding: 0 6px 6px 0;
   }
   .hipmx {
@@ -745,7 +899,7 @@
   .hipmx thead th {
     position: sticky;
     top: 0;
-    background: #fff;
+    background: var(--surface);
     z-index: 1;
     text-align: center;
     font-size: 11px;
@@ -754,31 +908,31 @@
     border-bottom: none;
     cursor: default;
     padding: 3px 8px;
-    color: #666;
+    color: var(--muted);
     font-weight: 600;
   }
   .hipmx th:hover {
     background: none;
   }
   .hipmx thead .hipmx-grp th {
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--edge-strong);
     font-size: 10px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #888;
+    color: var(--soft);
   }
   .hipmx tbody th {
     position: static;
     background: none;
     text-align: left;
     font-size: 12px;
-    color: #1b1b1b;
+    color: var(--ink);
     white-space: nowrap;
   }
   .hipmx tbody th small {
     display: block;
     font-weight: 400;
-    color: #888;
+    color: var(--soft);
     font-size: 11px;
     max-width: 220px;
     overflow: hidden;
@@ -801,34 +955,39 @@
     background: inherit;
   }
   .hipmx td.m0 {
-    border: 1px dashed #d5d5d5;
-    color: #999;
-    background: #fff;
+    border: 1px dashed var(--edge-strong);
+    color: var(--soft);
+    background: var(--surface);
   }
-  .hipmx td.m1 {
-    background: #cde2fb;
-    color: #1b1b1b;
+  .hipmx td.m1,
+  .hipmx-legend i.m1 {
+    background: var(--heat-1);
+    color: var(--on-heat-low);
   }
-  .hipmx td.m2 {
-    background: #9ec5f4;
-    color: #1b1b1b;
+  .hipmx td.m2,
+  .hipmx-legend i.m2 {
+    background: var(--heat-2);
+    color: var(--on-heat-low);
   }
-  .hipmx td.m3 {
-    background: #5598e7;
-    color: #fff;
+  .hipmx td.m3,
+  .hipmx-legend i.m3 {
+    background: var(--heat-3);
+    color: var(--on-heat-high);
   }
-  .hipmx td.m4 {
-    background: #2a78d6;
-    color: #fff;
+  .hipmx td.m4,
+  .hipmx-legend i.m4 {
+    background: var(--heat-4);
+    color: var(--on-heat-high);
   }
-  .hipmx td.m5 {
-    background: #104281;
-    color: #fff;
+  .hipmx td.m5,
+  .hipmx-legend i.m5 {
+    background: var(--heat-5);
+    color: var(--on-heat-high);
   }
   .hipmx td.mo {
-    border: 1px solid #9ec5f4;
-    color: #2a78d6;
-    background: #fff;
+    border: 1px solid var(--heat-open-edge);
+    color: var(--heat-open);
+    background: var(--surface);
   }
   .hipmx td.hipmx-status {
     width: auto;
@@ -836,7 +995,7 @@
     text-align: left;
     font-weight: 500;
     font-size: 11px;
-    color: #555;
+    color: var(--muted);
     padding: 0 8px;
     white-space: nowrap;
     background: transparent;
@@ -850,16 +1009,16 @@
     text-align: left;
     font-weight: 500;
     font-size: 11px;
-    color: #555;
+    color: var(--muted);
     padding: 0 8px;
-    background: #fff !important;
+    background: var(--surface) !important;
   }
   .hipmx td.hipmx-gaps .ok {
-    color: #0a7a0a;
+    color: var(--ok-ink);
     font-weight: 600;
   }
   .hipmx td.hipmx-gaps .none {
-    color: #aaa;
+    color: var(--soft);
   }
   .hipmx-legend {
     display: flex;
@@ -868,7 +1027,7 @@
     gap: 6px;
     margin-top: 10px;
     font-size: 11.5px;
-    color: #777;
+    color: var(--muted);
   }
   .hipmx-legend i {
     width: 22px;
@@ -880,20 +1039,20 @@
     cursor: pointer;
   }
   .hipmx td.ck:focus-visible {
-    outline: 2px solid #1b1b1b;
+    outline: 2px solid var(--ink);
     outline-offset: 1px;
   }
   .hipmx td.sel {
-    outline: 2px solid #1b1b1b;
+    outline: 2px solid var(--ink);
     outline-offset: 1px;
   }
   .hipmx tr.flash th {
-    background: #fff3d6;
+    background: var(--flash);
     border-radius: 4px;
   }
   .hipmx tr.flash td.hipmx-status,
   .hipmx tr.flash td.hipmx-gaps {
-    background: #fff3d6 !important;
+    background: var(--flash) !important;
   }
   .hipmx-filters {
     display: flex;
@@ -910,29 +1069,29 @@
     gap: 6px;
     flex-wrap: wrap;
     font-size: 12px;
-    color: #888;
+    color: var(--soft);
   }
   .hipmx-fbtn {
     padding: 3px 11px;
-    border: 1px solid #ddd;
-    background: #fff;
-    border-radius: 999px;
+    border: 1px solid var(--edge-input);
+    background: var(--surface);
+    border-radius: var(--r-pill);
     cursor: pointer;
     font-size: 12px;
-    color: #444;
+    color: var(--ink);
   }
   .hipmx-fbtn:hover {
-    border-color: #999;
+    border-color: var(--soft);
   }
   .hipmx-fbtn.active {
-    background: #1b1b1b;
-    color: #fff;
-    border-color: #1b1b1b;
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
   }
   .hipev {
     margin-top: 12px;
-    border: 1px solid #e6e6e6;
-    border-radius: 8px;
+    border: 1px solid var(--edge);
+    border-radius: var(--r-frame);
     padding: 12px 14px;
   }
   .hipev-head {
@@ -947,7 +1106,7 @@
     font-weight: 600;
   }
   .hipev-head .n {
-    color: #888;
+    color: var(--soft);
     font-size: 12px;
   }
   .hipev-head button {
@@ -962,7 +1121,7 @@
   }
   .hipev li {
     padding: 6px 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--row-line);
     font-size: 12.5px;
   }
   .hipev li:last-child {
@@ -977,27 +1136,27 @@
   .hipev .l1 a {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: #2a78d6;
+    color: var(--link);
     text-decoration: none;
   }
   .hipev .l1 a:hover {
     text-decoration: underline;
   }
   .hipev .t {
-    color: #444;
+    color: var(--muted);
   }
   .hipev .meta {
-    color: #999;
+    color: var(--soft);
     font-size: 11.5px;
     white-space: nowrap;
   }
   .hipev .cue {
-    color: #8a6200;
+    color: var(--warn-ink);
     font-size: 11.5px;
     font-weight: 600;
   }
   .hipev .snip {
-    color: #999;
+    color: var(--soft);
     font-size: 11px;
     margin-top: 2px;
     overflow: hidden;
@@ -1009,14 +1168,14 @@
     margin: 0;
     padding-left: 18px;
     font-size: 13px;
-    color: #444;
+    color: var(--muted);
     display: flex;
     flex-direction: column;
     gap: 8px;
     max-width: 85ch;
   }
   .hipabout strong {
-    color: #1b1b1b;
+    color: var(--ink);
   }
   .glossary .hipabout {
     margin: 0 0 12px;
@@ -1031,22 +1190,22 @@
   }
   .hipboard-col {
     flex: 0 0 172px;
-    background: #f7f7f5;
-    border: 1px solid #ececec;
-    border-radius: 8px;
+    background: var(--raise);
+    border: 1px solid var(--edge);
+    border-radius: var(--r-frame);
     padding: 10px 10px 12px;
   }
   .hipboard-col h3 {
     font-size: 12px;
     font-weight: 600;
     margin: 0 0 8px;
-    color: #444;
+    color: var(--ink);
     display: flex;
     justify-content: space-between;
     align-items: baseline;
   }
   .hipboard-col h3 .n {
-    color: #999;
+    color: var(--soft);
     font-weight: 600;
     font-size: 12px;
   }
@@ -1058,27 +1217,27 @@
     overflow-y: auto;
   }
   .hipboard-chips .none {
-    color: #bbb;
+    color: var(--soft);
     font-size: 12px;
   }
   .hipchip {
     padding: 2px 8px;
-    border: 1px solid #d8d8d8;
-    background: #fff;
-    border-radius: 6px;
+    border: 1px solid var(--edge-input);
+    background: var(--surface);
+    border-radius: var(--r-control);
     cursor: pointer;
     font-size: 11.5px;
     font-weight: 600;
-    color: #255e9e;
+    color: var(--link-ink);
     font-variant-numeric: tabular-nums;
   }
   .hipchip:hover {
-    border-color: #2a78d6;
+    border-color: var(--link);
   }
   .hipchip.active {
-    border-color: #1b1b1b;
-    color: #1b1b1b;
-    background: #f3f3f3;
+    border-color: var(--ink);
+    color: var(--ink);
+    background: var(--raise);
   }
   .hipboard-info {
     display: flex;
@@ -1087,15 +1246,15 @@
     flex-wrap: wrap;
     margin-top: 10px;
     padding: 9px 12px;
-    border: 1px solid #e6e6e6;
-    border-radius: 8px;
+    border: 1px solid var(--edge);
+    border-radius: var(--r-frame);
     font-size: 13px;
   }
   .hipboard-info strong {
     font-variant-numeric: tabular-nums;
   }
   .hipboard-info .t {
-    color: #444;
+    color: var(--muted);
   }
   .hipboard-info button {
     margin-left: auto;

@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchManifest, type Manifest, type SectionDoc } from "./api";
+import { fetchManifest, type ChartSection, type Manifest } from "./api";
 import { ChartSectionCard } from "./components/ChartSectionCard";
 import { Glossary } from "./components/Glossary";
 import { MetricTiles } from "./components/MetricTiles";
@@ -20,21 +20,6 @@ import { useSectionDocs } from "./useSectionDocs";
 import { useViewDocs } from "./useViewDocs";
 import { ViewCards } from "./components/ViewCards";
 
-/** Sections in order, grouped by their `group` label (order of appearance). */
-function groupSections(docs: SectionDoc[]): [string, SectionDoc[]][] {
-  const groups: [string, SectionDoc[]][] = [];
-  for (const doc of docs) {
-    const name = doc.group || "";
-    const last = groups[groups.length - 1];
-    if (last && last[0] === name) {
-      last[1].push(doc);
-    } else {
-      groups.push([name, [doc]]);
-    }
-  }
-  return groups;
-}
-
 function OrgPanel({ org, manifest, macro }: { org: string; manifest: Manifest; macro: string }) {
   const entry = manifest.orgs[org];
   const refs = useMemo(
@@ -45,38 +30,57 @@ function OrgPanel({ org, manifest, macro }: { org: string; manifest: Manifest; m
     () => (entry.views ?? []).filter((view) => view.macro === macro),
     [entry, macro],
   );
-  const { docs, failed } = useSectionDocs(refs);
-  const { views, failed: failedViews } = useViewDocs(viewRefs);
+  const { docs, failed, loading: docsLoading } = useSectionDocs(refs);
+  const { views, failed: failedViews, loading: viewsLoading } = useViewDocs(viewRefs);
   const unavailable = [...failedViews, ...failed];
 
   const chartSections = (entry.chart_sections ?? []).filter((section) => section.macro === macro);
   const provenance = manifest.provenance;
-  const groups: Group[] = [
-    // Legacy order: a family's bespoke views (board, matrix) lead its chart
-    // galleries, then its tables — governance context first, then the
-    // supporting charts, then the individual evidence.
-    ...(chartSections.length || views.length
-      ? ([
+
+  // The tab is a sequence of named sections: each group renders its views,
+  // then its chart cards, then its tables, and the jump bar links each one —
+  // there is no generic "Charts" section. Order comes from the manifest's
+  // group_order; anything it doesn't mention (older manifest, ad-hoc group)
+  // is appended in order of appearance. Groups with nothing to show for this
+  // org are dropped entirely.
+  //
+  // Held back until views and tables settle: sections would otherwise paint
+  // partially and then reshuffle as the async pieces arrive. A brief wait for
+  // the whole tab in its final order beats content that moves.
+  const chartGroup = (section: ChartSection) => section.group || section.title;
+  const declaredOrder = manifest.group_order?.[macro] ?? [];
+  const names = [...declaredOrder];
+  for (const section of chartSections) {
+    if (!names.includes(chartGroup(section))) names.push(chartGroup(section));
+  }
+  for (const doc of docs) {
+    if (!names.includes(doc.group || "")) names.push(doc.group || "");
+  }
+  const settled = !viewsLoading && !docsLoading;
+  const groups: Group[] = !settled
+    ? []
+    : names.flatMap((name): Group[] => {
+        const groupViews = views.filter((view) => (view.group ?? names[0]) === name);
+        const groupCharts = chartSections.filter((section) => chartGroup(section) === name);
+        const groupDocs = docs.filter((doc) => (doc.group || "") === name);
+        if (!groupViews.length && !groupCharts.length && !groupDocs.length) return [];
+        return [
           [
-            "Charts",
+            name,
             <>
-              {views.length > 0 && <ViewCards views={views} sectionDocs={docs} provenance={provenance} />}
-              {chartSections.map((section) => (
+              {groupViews.length > 0 && (
+                <ViewCards views={groupViews} sectionDocs={docs} provenance={provenance} />
+              )}
+              {groupCharts.map((section) => (
                 <ChartSectionCard key={section.id} section={section} provenance={provenance} />
+              ))}
+              {groupDocs.map((doc) => (
+                <SectionTable key={doc.id} doc={doc} provenance={provenance} periodLabels={manifest.period_labels} />
               ))}
             </>,
           ],
-        ] as Group[])
-      : []),
-    ...groupSections(docs).map(
-      ([name, sections]): Group => [
-        name,
-        sections.map((doc) => (
-          <SectionTable key={doc.id} doc={doc} provenance={provenance} periodLabels={manifest.period_labels} />
-        )),
-      ],
-    ),
-  ];
+        ];
+      });
 
   return (
     <>
@@ -112,7 +116,7 @@ export default function App() {
   }
 
   const orgs = Object.keys(manifest.orgs);
-  const macros = [
+  const derived = [
     ...new Set(
       Object.values(manifest.orgs).flatMap((entry) => [
         ...(entry.sections ?? []).map((section) => section.macro),
@@ -121,19 +125,31 @@ export default function App() {
       ]),
     ),
   ];
+  // The manifest's family order wins where it knows the macro; anything it
+  // doesn't list (older manifest, ad-hoc macro) keeps its derived position.
+  const declared = (manifest.macro_order ?? []).filter((name) => derived.includes(name));
+  const macros = [...declared, ...derived.filter((name) => !declared.includes(name))];
   const activeMacro = macros.includes(macro) ? macro : macros[0];
-  // The org tab bar appears only on macros where more than one org actually
-  // has content (e.g. only Contributors for hiero-hackers).
-  const orgsForMacro = orgs.filter((name) => {
-    const entry = manifest.orgs[name];
-    return (
-      (entry.sections ?? []).some((section) => section.macro === activeMacro) ||
-      (entry.chart_sections ?? []).some((section) => section.macro === activeMacro) ||
-      (entry.views ?? []).some((view) => view.macro === activeMacro)
-    );
-  });
-  const shownOrg = orgsForMacro.includes(org) ? org : (orgsForMacro[0] ?? orgs[0]);
-  const glossary = manifest.macro_glossaries?.[activeMacro];
+  // Umbrella tabs: a macro with a parent renders as a sub-tab of that parent.
+  // The top bar shows one entry per umbrella (in content order); a second tab
+  // row appears for the active umbrella's members. The hash keeps storing the
+  // actual macro, so old links keep working.
+  const parents = manifest.macro_parents ?? {};
+  const topOf = (name: string) => parents[name] ?? name;
+  const topTabs = [...new Set(macros.map(topOf))];
+  const activeTop = topOf(activeMacro);
+  const subTabs = macros.filter((name) => parents[name] === activeTop);
+  // The org filter is global: it lists every org and the selection sticks as
+  // tabs change. A tab the selected org has no content for renders a short
+  // explanation (from the manifest) instead of a blank page, so absence reads
+  // as a property of the data rather than a bug.
+  const shownOrg = orgs.includes(org) ? org : orgs[0];
+  const shownEntry = manifest.orgs[shownOrg];
+  const orgHasMacro =
+    (shownEntry.sections ?? []).some((section) => section.macro === activeMacro) ||
+    (shownEntry.chart_sections ?? []).some((section) => section.macro === activeMacro) ||
+    (shownEntry.views ?? []).some((view) => view.macro === activeMacro);
+  const glossary = orgHasMacro ? manifest.macro_glossaries?.[activeMacro] : undefined;
 
   return (
     <div className="wrap">
@@ -141,15 +157,32 @@ export default function App() {
       <p className="sub">
         Generated {stamp(manifest.generated_at)} UTC · every table filters and sorts · click a chart to enlarge.
       </p>
-      <TabBar items={macros} active={activeMacro} onSelect={setMacro} kind="macro" />
+      {/* The org filter is the outermost scope — everything below it is "this
+          org's view" — so it sits above the content tabs. */}
+      {orgs.length > 1 && <TabBar items={orgs} active={shownOrg} onSelect={setOrg} kind="tab" />}
+      <TabBar
+        items={topTabs}
+        active={activeTop}
+        onSelect={(name) => setMacro(macros.find((candidate) => topOf(candidate) === name) ?? name)}
+        kind="macro"
+      />
+      {subTabs.length > 0 && <TabBar items={subTabs} active={activeMacro} onSelect={setMacro} kind="tab" />}
       {/* Every macro ships its own explainer, listing only what that tab
           shows. It may be absent when a cached bundle meets an older manifest
           — degrade to no glossary, never a crash. */}
       {glossary && <Glossary glossary={glossary} />}
-      {orgsForMacro.length > 1 && <TabBar items={orgsForMacro} active={shownOrg} onSelect={setOrg} kind="tab" />}
-      <OrgPanel org={shownOrg} manifest={manifest} macro={activeMacro} />
-      <WipFooter />
-      <ProvenanceFooter provenance={manifest.provenance} />
+      {orgHasMacro ? (
+        <OrgPanel org={shownOrg} manifest={manifest} macro={activeMacro} />
+      ) : (
+        <p className="empty">
+          {manifest.macro_absent_notes?.[activeMacro] ?? `No ${activeMacro} data for ${shownOrg}.`}
+        </p>
+      )}
+      {/* One footer bar: WIP notice left, provenance right — same rule, same baseline. */}
+      <div className="footrow">
+        {manifest.wip !== false && <WipFooter issuesUrl={manifest.issues_url} />}
+        <ProvenanceFooter provenance={manifest.provenance} />
+      </div>
     </div>
   );
 }

@@ -5,12 +5,21 @@ Pure data; see the package __init__ for assembly.
 
 from __future__ import annotations
 
+# Shown when the selected org has no content for this tab.
+ABSENT_NOTE = (
+    "Nothing generated for this org yet: the scorecard and repo-compliance "
+    "pipelines are org-independent, so this fills in on the next full run."
+)
+
 CHART_MACRO = {
     "name": "Security & scorecards",
     "charts": {
-        "hiero-ledger": [
+        # "*": org-independent — these cards render for any org whose pipelines
+        # produced the files (missing variants drop out per org).
+        "*": [
             {
                 "id": "scorecard",
+                "group": "Scorecards",
                 "title": "OpenSSF scorecard",
                 "description": "Org-level OpenSSF scorecard and its per-check breakdown.",
                 "files": [
@@ -20,6 +29,7 @@ CHART_MACRO = {
             },
             {
                 "id": "ownership",
+                "group": "Ownership",
                 "title": "Code owners & CI runners",
                 "description": (
                     "How many repositories declare code owners, and which CI runners the rest of the "
@@ -56,6 +66,8 @@ SECTION_SPECS = [
 ]
 
 SECTION_GROUPS = [
+    # Scorecards is chart-only; the ownership card renders above its table.
+    ("Scorecards", []),
     ("Ownership", ["codeowners"]),
 ]
 

@@ -93,12 +93,12 @@ describe('Chart printing', () => {
       <InteractiveChart variant={variant} title="Contributors" provenance={MANIFEST.provenance} />,
     );
     expect(screen.getByRole('status')).toHaveAttribute('data-print-pending');
-    expect(screen.getByRole('status')).toHaveTextContent('Contributors (All)');
+    expect(screen.getByRole('status')).toHaveTextContent('Contributors — All');
 
     await act(async () => fail());
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveAttribute('data-print-error');
-    expect(alert).toHaveTextContent('Could not load chart data: Contributors (All).');
+    expect(alert).toHaveTextContent('Could not load chart data: Contributors — All.');
     expect(document.querySelector('[data-print-pending]')).toBeNull();
     vi.unstubAllGlobals();
   });

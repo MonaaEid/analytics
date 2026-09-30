@@ -10,6 +10,7 @@ import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { fetchApiText, type ChartSection, type ChartSpec, type Manifest } from '../api';
 import { downloadCsvText } from '../csv';
+import { chartViewName } from '../format';
 import { usePrintMode } from '../printContext';
 import { ChartSectionTitle } from './charts/leading';
 import { CopyLinkButton } from './CopyLinkButton';
@@ -66,7 +67,7 @@ function Figure({
   return (
     <figure
       hidden={hidden}
-      aria-label={`${chart.title} — ${active.label}`}
+      aria-label={chartViewName(chart.title, active.label)}
       className={cn(
         'm-0 min-w-0 rounded-xl border bg-background/40 p-3',
         (slide || fullRow) && 'col-span-full',
@@ -86,7 +87,7 @@ function Figure({
         <Suspense
           fallback={
             <p role="status" data-print-pending className="p-10 text-center text-muted-foreground">
-              Loading chart: {chart.title} ({active.label})…
+              Loading chart: {chartViewName(chart.title, active.label)}…
             </p>
           }
         >

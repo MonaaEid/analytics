@@ -8,6 +8,7 @@ import { RotateCwIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ChartDocument, ChartVariant, Manifest } from '../api';
 import { fetchChartDocument } from '../chartData';
+import { chartViewName } from '../format';
 import { EventsView } from './charts/EventsView';
 import { MatrixView } from './charts/MatrixView';
 import { NetworkView } from './charts/NetworkView';
@@ -83,7 +84,7 @@ export default function InteractiveChart({
           data-print-pending
           className="flex h-[340px] items-center justify-center text-sm text-muted-foreground"
         >
-          Loading interactive chart: {title} ({variant.label})…
+          Loading interactive chart: {chartViewName(title, variant.label)}…
         </div>
       </>
     );
@@ -96,7 +97,7 @@ export default function InteractiveChart({
           data-print-error
           className="print-chart-status mb-4 flex flex-wrap items-center gap-3 rounded-lg border p-4 text-sm"
         >
-          Could not load chart data: {title} ({variant.label}).
+          Could not load chart data: {chartViewName(title, variant.label)}.
           <Button
             variant="outline"
             size="sm"

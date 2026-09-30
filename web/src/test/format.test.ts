@@ -1,7 +1,7 @@
 /** Timestamps are labelled UTC wherever they appear, so they must be in UTC. */
 
 import { describe, expect, it } from 'vitest';
-import { dateStamp, stamp } from '../format';
+import { chartViewName, dateStamp, stamp } from '../format';
 
 describe('stamp', () => {
   it('keeps a UTC timestamp as-is', () => {
@@ -40,6 +40,17 @@ describe('dateStamp', () => {
   it('assumes UTC for a naive timestamp and degrades raw when unparseable', () => {
     expect(dateStamp('2026-07-25T10:00:00')).toBe('2026-07-25');
     expect(dateStamp('not-a-date')).toBe('not-a-date');
+  });
+});
+
+describe('chartViewName', () => {
+  it('names the variant after the title', () => {
+    expect(chartViewName('Contributors', 'By month')).toBe('Contributors — By month');
+  });
+
+  it('does not repeat a single-view chart’s title', () => {
+    // A chart with one view is labelled with its own title.
+    expect(chartViewName('Activity heatmap', 'Activity heatmap')).toBe('Activity heatmap');
   });
 });
 

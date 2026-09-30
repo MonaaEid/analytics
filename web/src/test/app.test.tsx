@@ -206,8 +206,10 @@ describe('Organisation diversity card (#435)', () => {
     return await screen.findByText('Organisation diversity');
   };
 
-  const chartVariant = (title: string) =>
-    screen.getByRole('figure', { name: new RegExp(`^${title} —`) }).getAttribute('aria-label');
+  // A figure is named "<title> — <variant>", or just its title when it has one view.
+  const figureNamed = (title: string) =>
+    screen.getByRole('figure', { name: new RegExp(`^${title}( —|$)`) });
+  const chartVariant = (title: string) => figureNamed(title).getAttribute('aria-label');
 
   it('gives the card one role axis, so every role-tabbed chart switches together', async () => {
     await openDiversity();
@@ -223,8 +225,9 @@ describe('Organisation diversity card (#435)', () => {
 
     expect(chartVariant('Role-holders by organisation')).toContain('Committers');
     expect(chartVariant('Single-employer repos by org')).toContain('Committers');
-    // The chart with no role axis is untouched by the card's tabs.
-    expect(chartVariant('Single-employer teams by org')).toContain('Single-employer teams by org');
+    // The chart with no role axis is untouched by the card's tabs, and its one
+    // view is named once rather than "<title> — <title>".
+    expect(chartVariant('Single-employer teams by org')).toBe('Single-employer teams by org');
   });
 
   // Out-of-range tabs clamp to the last one; anything else falls back to the first.
@@ -244,11 +247,9 @@ describe('Organisation diversity card (#435)', () => {
 
   it('leads an odd run of half-width charts with a two-row chart', async () => {
     await openDiversity();
-    const figure = (title: string) =>
-      screen.getByRole('figure', { name: new RegExp(`^${title} —`) });
     // Three half-width charts: the first spans two rows, the others stack beside it.
-    expect(figure('Role-holders by organisation')).toHaveClass('lg:row-span-2');
-    expect(figure('Single-employer teams by org')).not.toHaveClass('lg:row-span-2');
+    expect(figureNamed('Role-holders by organisation')).toHaveClass('lg:row-span-2');
+    expect(figureNamed('Single-employer teams by org')).not.toHaveClass('lg:row-span-2');
   });
 
   it('leaves a chart with its own variant set on its own tabs', async () => {

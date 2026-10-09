@@ -1,0 +1,92 @@
+name: Generate Report and Open PR
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Runs every Monday at 8:00 AM UTC
+  workflow_dispatch: # Allows manual trigger from the Actions tab
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Never let two runs race: both would rewrite the same evidence files and the
+# same PR branch, and the CodeRabbit prompt dedupe assumes one posting at a time.
+concurrency:
+  group: generate-reports
+  cancel-in-progress: false
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+
+    env:
+      # The site that publishes the static data API (manifest.json + documents).
+      ANALYTICS_BASE_URL: "https://analytics.hiero.org"
+      REPORT_ORG: hiero-ledger
+      # Filing year of the annual review; omit to let the script derive it
+      # (from October onwards it targets the next calendar year).
+      REPORT_YEAR: "2027"
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch data API and stage report evidence
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const script = require('./.github/scripts/report_generating_pr.js');
+            await script.generate({ github, context });
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies and Chromium
+        continue-on-error: true
+        run: |
+          npm ci --prefix web
+          npx --prefix web playwright install --with-deps chromium
+
+      - name: Capture chart figures (PNG)
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const script = require('./.github/scripts/report_generating_pr.js');
+            const { captured, skipped } = await script.captureChartPngs();
+            core.info(`captured ${captured} figure(s), skipped ${skipped}`);
+
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          add-paths: |
+            hiero_reports/**
+          commit-message: "docs: refresh annual report evidence and figures"
+          title: "Automated Annual Report Draft"
+          body: |
+            This automated pull request stages the latest data-API evidence (digest, chart JSONs, rendered figures)
+            for the annual report and asks CodeRabbit to draft/update `hiero_reports/annual_report/`.
+
+            *Triggered via GitHub Actions.*
+          branch: automated-report-update
+          delete-branch: true
+          signoff: true
+
+      - name: Prompt CodeRabbit to write the report
+        if: steps.cpr.outputs.pull-request-number != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const script = require('./.github/scripts/report_generating_pr.js');
+            await script.promptCodeRabbit({ github, context, prNumber: '${{ steps.cpr.outputs.pull-request-number }}' });

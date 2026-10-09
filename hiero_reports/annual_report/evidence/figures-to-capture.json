@@ -1,0 +1,46 @@
+{
+  "org": "hiero-ledger",
+  "base": "https://analytics.hiero.org",
+  "as_of": "2026-10-06",
+  "figures": [
+    {
+      "id": "repo-growth",
+      "cardTitle": "Repository growth",
+      "chartTitle": "Cumulative repo count",
+      "variantLabel": "Cumulative repo count",
+      "tab": "Contributors",
+      "docPath": "hiero-ledger/charts/cumulative_repo_count.json",
+      "jsonUrl": "https://analytics.hiero.org/data/api/v1/hiero-ledger/charts/cumulative_repo_count.json",
+      "dashboardUrl": "https://analytics.hiero.org/#tab=Contributors&org=hiero-ledger&widget=repo-growth&repo-growth.slide=1",
+      "captionTitle": "Cumulative Hiero repositories with a release over time",
+      "why": "Growth in the number of Hiero repositories that have shipped a release.",
+      "fileName": "repo-growth.png"
+    },
+    {
+      "id": "maintainer-pipeline",
+      "cardTitle": "Maintainer pipeline over time",
+      "chartTitle": "Unique active contributors by role",
+      "variantLabel": "All time",
+      "tab": "Governance",
+      "docPath": "hiero-ledger/charts/maintainer_pipeline_yearly.json",
+      "jsonUrl": "https://analytics.hiero.org/data/api/v1/hiero-ledger/charts/maintainer_pipeline_yearly.json",
+      "dashboardUrl": "https://analytics.hiero.org/#tab=Governance&org=hiero-ledger&widget=maintainer-pipeline",
+      "captionTitle": "Unique active contributors by role, per year",
+      "why": "How many people were active in each role across the project.",
+      "fileName": "maintainer-pipeline.png"
+    },
+    {
+      "id": "org-diversity",
+      "cardTitle": "Organisation diversity",
+      "chartTitle": "Role-holders by organisation",
+      "variantLabel": "Maintainers",
+      "tab": "Governance",
+      "docPath": "hiero-ledger/charts/affiliation_donut.json",
+      "jsonUrl": "https://analytics.hiero.org/data/api/v1/hiero-ledger/charts/affiliation_donut.json",
+      "dashboardUrl": "https://analytics.hiero.org/#tab=Governance&org=hiero-ledger&widget=org-diversity&org-diversity.slide=0",
+      "captionTitle": "Governance role-holders by employer organisation (maintainers)",
+      "why": "The spread of governance role-holders across employer organisations.",
+      "fileName": "org-diversity.png"
+    }
+  ]
+}

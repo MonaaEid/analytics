@@ -120,14 +120,53 @@ SECTION_SPECS = [
         "title": "All contributors",
         "description": "Every contributor's org-wide activity in the selected period, most recently active first.",
         "columns": [
-            Column("contributor", "Contributor", description="The unique identifier for each person tracked on this dashboard, usually their GitHub login."),
-            Column("prs_opened", "PRs opened", format="number", description="Pull requests opened by this contributor. Used to measure contribution volume."),
-            Column("reviews_given", "Reviews", format="number", description="Pull request reviews submitted by this contributor. Highlights code review activity."),
-            Column("merges_done", "Merges", format="number", description="Merged pull requests by this contributor. Tracks contribution volume through merged work."),
-            Column("issues_opened", "Issues opened", format="number", description="Issues opened by this contributor. Shows how actively they file and track bugs or feature requests."),
-            Column("labels_applied", "Labels applied", format="number", description="Labels applied by this contributor across repositories. Indicates their involvement in code ownership or triage."),
-            Column("repos_touched", "Repositories touched", format="number", description="Distinct repositories this contributor has committed to. Shows the breadth of their impact across the codebase."),
-            Column("last_active", "Last active", format="date", description="The most recent date this contributor had any tracked activity. Used to measure ongoing engagement."),
+            Column(
+                "contributor",
+                "Contributor",
+                description="The unique identifier for each person tracked on this dashboard, usually their GitHub login.",
+            ),
+            Column(
+                "prs_opened",
+                "PRs opened",
+                format="number",
+                description="Pull requests opened by this contributor. Used to measure contribution volume.",
+            ),
+            Column(
+                "reviews_given",
+                "Reviews",
+                format="number",
+                description="Pull request reviews submitted by this contributor. Highlights code review activity.",
+            ),
+            Column(
+                "merges_done",
+                "Merges",
+                format="number",
+                description="Merged pull requests by this contributor. Tracks contribution volume through merged work.",
+            ),
+            Column(
+                "issues_opened",
+                "Issues opened",
+                format="number",
+                description="Issues opened by this contributor. Shows how actively they file and track bugs or feature requests.",
+            ),
+            Column(
+                "labels_applied",
+                "Labels applied",
+                format="number",
+                description="Labels applied by this contributor across repositories. Indicates their involvement in code ownership or triage.",
+            ),
+            Column(
+                "repos_touched",
+                "Repositories touched",
+                format="number",
+                description="Distinct repositories this contributor has committed to. Shows the breadth of their impact across the codebase.",
+            ),
+            Column(
+                "last_active",
+                "Last active",
+                format="date",
+                description="The most recent date this contributor had any tracked activity. Used to measure ongoing engagement.",
+            ),
         ],
     },
     {
@@ -145,8 +184,16 @@ SECTION_SPECS = [
             "should be rare."
         ),
         "columns": [
-            Column("login", "Login", description="The unique GitHub login identifying a contributor. Used to track all activity attributed to this person."),
-            Column("signal", "Signal matched", description="A weak automation signal found in the login. Triggers bot suspects review: matches patterns like 'automation', 'actions', 'service', 'auto', 'svc', 'ci', or 'bot' as a whole segment."),
+            Column(
+                "login",
+                "Login",
+                description="The unique GitHub login identifying a contributor. Used to track all activity attributed to this person.",
+            ),
+            Column(
+                "signal",
+                "Signal matched",
+                description="A weak automation signal found in the login. Triggers bot suspects review: matches patterns like 'automation', 'actions', 'service', 'auto', 'svc', 'ci', or 'bot' as a whole segment.",
+            ),
         ],
     },
 ]

@@ -140,9 +140,20 @@ SECTION_SPECS = [
         ),
         "columns": [
             Column("hip", "HIP", description="The HIP specification number, e.g., 'HIP-1200'."),
-            Column("hip_title", "title", description="The title of the HIP specification as defined in its frontmatter."),
-            Column("hip_status", "spec status", description="The current status of the HIP: Draft, Review, Last Call, Approved, Accepted, Final, Active, or Retired."),
-            Column("hip_created", "spec created", format="date", description="The date this HIP specification was created, as recorded in its frontmatter."),
+            Column(
+                "hip_title", "title", description="The title of the HIP specification as defined in its frontmatter."
+            ),
+            Column(
+                "hip_status",
+                "spec status",
+                description="The current status of the HIP: Draft, Review, Last Call, Approved, Accepted, Final, Active, or Retired.",
+            ),
+            Column(
+                "hip_created",
+                "spec created",
+                format="date",
+                description="The date this HIP specification was created, as recorded in its frontmatter.",
+            ),
         ],
     },
     {
@@ -187,8 +198,14 @@ SECTION_SPECS = [
             Column("hip", "number", description="The HIP specification number this evidence reference is for."),
             Column("repo", "repository", description="The repository this evidence reference is for."),
             Column("pr_number", "PR", description="The pull request number that provides evidence for this HIP."),
-            Column("pr_title", "PR title", description="The title of the pull request providing evidence for this HIP."),
-            Column("snippet", "matched text", description="A short text excerpt from the PR title, body, or description that matched the HIP reference pattern."),
+            Column(
+                "pr_title", "PR title", description="The title of the pull request providing evidence for this HIP."
+            ),
+            Column(
+                "snippet",
+                "matched text",
+                description="A short text excerpt from the PR title, body, or description that matched the HIP reference pattern.",
+            ),
         ],
     },
 ]

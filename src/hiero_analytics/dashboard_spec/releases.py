@@ -90,11 +90,35 @@ SECTION_SPECS = [
         ),
         "columns": [
             Column("repo", "repo", description="The repository name."),
-            Column("latest_release", "latest release", format="date", description="The most recent GitHub Release date for this repository."),
-            Column("days_since_last_release", "days since", format="number", description="Number of days since the latest release. A blank value means no release has been recorded."),
-            Column("median_gap_days", "typical gap (days)", format="number", description="Median number of days between consecutive releases for this repository."),
-            Column("staleness_ratio", "overdue vs. own pace", format="number", description="Ratio of days since last release divided by the repo's own median gap. Above 1 means currently past typical pace; below 1 means on schedule. This is relative to the repo's own history, not a fixed threshold."),
-            Column("staleness_bucket", "pace", description="Staleness category: on pace (1x typical gap), watch (1-3x typical gap), overdue (3x+), never released, or not enough history to judge. This is a relative signal based on the repo's release history."),
+            Column(
+                "latest_release",
+                "latest release",
+                format="date",
+                description="The most recent GitHub Release date for this repository.",
+            ),
+            Column(
+                "days_since_last_release",
+                "days since",
+                format="number",
+                description="Number of days since the latest release. A blank value means no release has been recorded.",
+            ),
+            Column(
+                "median_gap_days",
+                "typical gap (days)",
+                format="number",
+                description="Median number of days between consecutive releases for this repository.",
+            ),
+            Column(
+                "staleness_ratio",
+                "overdue vs. own pace",
+                format="number",
+                description="Ratio of days since last release divided by the repo's own median gap. Above 1 means currently past typical pace; below 1 means on schedule. This is relative to the repo's own history, not a fixed threshold.",
+            ),
+            Column(
+                "staleness_bucket",
+                "pace",
+                description="Staleness category: on pace (1x typical gap), watch (1-3x typical gap), overdue (3x+), never released, or not enough history to judge. This is a relative signal based on the repo's release history.",
+            ),
         ],
     },
 ]

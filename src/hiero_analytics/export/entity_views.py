@@ -18,7 +18,6 @@ fields; a breaking change moves to a new API version.
 
 from __future__ import annotations
 
-from hiero_analytics.export.columns import Column, column_spec
 import json
 import logging
 import re
@@ -34,6 +33,7 @@ from hiero_analytics.dashboard_spec import entities as spec
 from hiero_analytics.domain.periods import ACTIVITY_PERIODS
 from hiero_analytics.domain.repos import bare_repo
 from hiero_analytics.export.chart_data import chart_document
+from hiero_analytics.export.columns import Column, column_spec
 
 logger = logging.getLogger(__name__)
 
@@ -283,7 +283,11 @@ def _related(repo_id: str, tables: _Tables, sources: SourceSections) -> tuple[li
             list_frame = tables.frame(listing["file"])
             if list_frame is not None:
                 matches = _related_row(list_frame, repo_id)
-                keys = [column.key if isinstance(column, Column) else column[0] for column in listing["columns"] if (column.key if isinstance(column, Column) else column[0]) in matches.columns]
+                keys = [
+                    column.key if isinstance(column, Column) else column[0]
+                    for column in listing["columns"]
+                    if (column.key if isinstance(column, Column) else column[0]) in matches.columns
+                ]
                 if not matches.empty and keys:
                     ascending = listing["sort"] != "published_at"
                     matches = matches.sort_values(listing["sort"], ascending=ascending)
@@ -297,7 +301,15 @@ def _related(repo_id: str, tables: _Tables, sources: SourceSections) -> tuple[li
                             for column in listing["columns"]
                             if (column.key if isinstance(column, Column) else column[0]) in keys
                         ],
-                        "rows": _json_rows(matches[[(column.key if isinstance(column, Column) else column[0]) for column in listing["columns"] if (column.key if isinstance(column, Column) else column[0]) in keys]]),
+                        "rows": _json_rows(
+                            matches[
+                                [
+                                    (column.key if isinstance(column, Column) else column[0])
+                                    for column in listing["columns"]
+                                    if (column.key if isinstance(column, Column) else column[0]) in keys
+                                ]
+                            ]
+                        ),
                         **tables.freshness(listing["file"]),
                     }
                 if listing["file"] not in files:

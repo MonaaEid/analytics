@@ -11,7 +11,6 @@ This dual-shape design lets family modules keep using familiar tuple syntax
 while the API and consumers always get a consistent object representation.
 """
 
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,6 +36,14 @@ class Column:
         format: str | None = None,
         description: str | None = None,
     ) -> None:
+        """Initialize a Column instance.
+
+        Args:
+            key: A stable key identifying the column.
+            label: A human-readable label for the column.
+            format: An optional display format string.
+            description: An optional prose description.
+        """
         object.__setattr__(self, "key", key)
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "format", format)
@@ -46,17 +53,16 @@ class Column:
 def column_spec(column: Any) -> dict[str, Any]:
     """Serialize a column declaration to the API's dict shape.
 
-Accepts either:
-- A 2-, 3-, or 4-element tuple: (key, label, format?, description?)
-- A Column instance
+    Accepts either:
+    - A 2-, 3-, or 4-element tuple: (key, label, format?, description?)
+    - A Column instance
 
-Always returns a dict with:
-    - key (str)   — always present
-    - label (str) — always present
-    - format (str) — only when the declaration included a format
-    - description (str) — only when the declaration included a description
-"""
-
+    Always returns a dict with:
+        - key (str)   — always present
+        - label (str) — always present
+        - format (str) — only when the declaration included a format
+        - description (str) — only when the declaration included a description
+    """
     if isinstance(column, Column):
         key, label, format_, description = (
             column.key,
@@ -73,13 +79,9 @@ Always returns a dict with:
         elif len(column) == 4:
             key, label, format_, description = column[0], column[1], column[2], column[3]
         else:
-            raise ValueError(
-                f"column declaration has {len(column)} elements; expected 2, 3, or 4"
-            )
+            raise ValueError(f"column declaration has {len(column)} elements; expected 2, 3, or 4")
     else:
-        raise TypeError(
-            f"expected a Column or a 2-/3-/4-element tuple, got {type(column).__name__}"
-        )
+        raise TypeError(f"expected a Column or a 2-/3-/4-element tuple, got {type(column).__name__}")
 
     spec: dict[str, Any] = {
         "key": key,

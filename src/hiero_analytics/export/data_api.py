@@ -162,10 +162,7 @@ def _contract_frame(section: dict, frame: pd.DataFrame, where: str) -> pd.DataFr
     an accidental key becomes a promise we cannot withdraw. Nothing is hidden —
     the produced CSV under ``outputs/data/org/`` remains the full artifact.
     """
-    declared = [
-    column.key if isinstance(column, Column) else column[0]
-    for column in section["columns"]
-]
+    declared = [column.key if isinstance(column, Column) else column[0] for column in section["columns"]]
     missing = [key for key in declared if key not in frame.columns]
     if missing:
         raise DataApiContractError(

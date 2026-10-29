@@ -220,7 +220,6 @@ export function DataTable({
                         description={description}
                       />
                     )}
-                    
                   </TableHead>
                 );
               })}

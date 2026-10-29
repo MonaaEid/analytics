@@ -9,8 +9,8 @@ __init__ for assembly.
 
 from __future__ import annotations
 
-from hiero_analytics.dashboard_spec.constants import PROJECT_ISSUES_URL
 from hiero_analytics.dashboard_spec.columns import Column
+from hiero_analytics.dashboard_spec.constants import PROJECT_ISSUES_URL
 from hiero_analytics.dashboard_spec.glossary import GLOSSARY_NOTE, glossary_of
 from hiero_analytics.dashboard_spec.interactive import (
     ROLE_ACTIVITY,

@@ -13,10 +13,7 @@ export function ColumnHelp({ label, description }: ColumnHelpProps) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        asChild
-        aria-label={`About ${label}`}
-      >
+      <PopoverTrigger asChild aria-label={`About ${label}`}>
         <Button variant="ghost" size="icon" className="h-4 w-4 shrink-0" aria-hidden="true">
           <InfoIcon aria-hidden="true" className="size-3.5" />
         </Button>

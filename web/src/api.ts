@@ -33,6 +33,12 @@ export interface ColumnSpec {
    * an unformatted column.
    */
   format?: ColumnFormat;
+  /**
+   * Optional prose explaining what the column holds — the unit, the scope, how
+   * the period behaves. The dashboard renders it as a help control beside the
+   * column's label; a column without one shows no control at all.
+   */
+  description?: string;
 }
 
 export interface SectionRef {
@@ -280,7 +286,8 @@ export interface CIHealthMatrixView {
   badge: string;
   source: string;
   row_header: string;
-  columns: { key: string; label: string }[];
+  bands?: { label: string; span: number }[];
+  columns: { key: string; label: string; band?: string }[];
   rows: CIHealthRow[];
   filters: string[];
   generated_at?: string;

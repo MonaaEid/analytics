@@ -514,7 +514,7 @@ def test_fetch_org_issues_first_run_full_then_incremental(monkeypatch, tmp_path)
 
 
 def test_fetch_org_issues_dataset_fingerprint_ignores_state_order(monkeypatch, tmp_path):
-    """Issue set identity does not change the dataset file (same fingerprint).    """
+    """Issue set identity does not change the dataset file (same fingerprint)."""
     mock_client = Mock()
     seen_paths = []
 
@@ -533,7 +533,6 @@ def test_fetch_org_issues_dataset_fingerprint_ignores_state_order(monkeypatch, t
     ingest.fetch_org_issues_graphql(mock_client, "org")
 
     assert seen_paths[0] == seen_paths[1]  # identical regardless of state order
-
 
 
 def test_fetch_org_label_events_incremental_dedups_on_merge(monkeypatch, tmp_path):
